@@ -111,12 +111,13 @@ void GaussianModel::setShDegree(const int sh)
     this->active_sh_degree_ = (sh > this->max_sh_degree_ ? this->max_sh_degree_ : sh);
 }
 
+// 从稀疏点云中初始化高斯基元
 void GaussianModel::createFromPcd(
-    std::map<point3D_id_t, Point3D> pcd,
+    std::map<point3D_id_t, Point3D> pcd, 
     const float spatial_lr_scale)
 {
     this->spatial_lr_scale_ = spatial_lr_scale;
-    int num_points = static_cast<int>(pcd.size());
+    int num_points = static_cast<int>(pcd.size()); // 点云的数量
     torch::Tensor fused_point_cloud = torch::zeros(
         {num_points, 3},
         torch::TensorOptions().dtype(torch::kFloat).device(device_type_));
@@ -125,7 +126,7 @@ void GaussianModel::createFromPcd(
         torch::TensorOptions().dtype(torch::kFloat).device(device_type_));
     auto pcd_it = pcd.begin();
     for (int point_idx = 0; point_idx < num_points; ++point_idx) {
-        auto& point = (*pcd_it).second;
+        auto& point = (*pcd_it).second;  // 三维点坐标
         fused_point_cloud.index({point_idx, 0}) = point.xyz_(0);
         fused_point_cloud.index({point_idx, 1}) = point.xyz_(1);
         fused_point_cloud.index({point_idx, 2}) = point.xyz_(2);
@@ -135,7 +136,7 @@ void GaussianModel::createFromPcd(
         ++pcd_it;
     }
 
-    torch::Tensor fused_color = sh_utils::RGB2SH(color);
+    torch::Tensor fused_color = sh_utils::RGB2SH(color);  // 将颜色张量转换为球谐系数
     auto temp = this->max_sh_degree_ + 1;
     torch::Tensor features = torch::zeros(
         {fused_color.size(0), 3, temp * temp},
@@ -184,7 +185,7 @@ void GaussianModel::createFromPcd(
     this->scaling_ = scales.requires_grad_();
     this->rotation_ = rots.requires_grad_();
     this->opacity_ = opacities.requires_grad_();
-
+    
     GAUSSIAN_MODEL_TENSORS_TO_VEC
 
     this->max_radii2D_ = torch::zeros({this->getXYZ().size(0)}, torch::TensorOptions().device(device_type_));

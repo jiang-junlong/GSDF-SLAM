@@ -80,14 +80,17 @@ GaussianMapper::GaussianMapper(
     }
 
     // Sensors
+    // 设置传感器类型
     switch (pSLAM->getSensorType())
-    {
+    { 
+    // 单目
     case ORB_SLAM3::System::MONOCULAR:
     case ORB_SLAM3::System::IMU_MONOCULAR:
     {
         this->sensor_type_ = MONOCULAR;
     }
     break;
+    // 双目
     case ORB_SLAM3::System::STEREO:
     case ORB_SLAM3::System::IMU_STEREO:
     {
@@ -100,6 +103,7 @@ GaussianMapper::GaussianMapper(
         stereo_Q_.convertTo(stereo_Q_, CV_32FC3, 1.0);
     }
     break;
+    // RGBD
     case ORB_SLAM3::System::RGBD:
     case ORB_SLAM3::System::IMU_RGBD:
     {
@@ -116,7 +120,7 @@ GaussianMapper::GaussianMapper(
     // Cameras
     // TODO: not only monocular
     auto settings = pSLAM->getSettings();
-    cv::Size SLAM_im_size = settings->newImSize();
+    cv::Size SLAM_im_size = settings->newImSize();  // 图像尺寸
     UndistortParams undistort_params(
         SLAM_im_size,
         settings->camera1DistortionCoef()
@@ -134,6 +138,7 @@ GaussianMapper::GaussianMapper(
             float SLAM_cy = SLAM_camera->getParameter(3);
 
             // Old K, i.e. K in SLAM
+            // 设置相机内参
             cv::Mat K = (
                 cv::Mat_<float>(3, 3)
                     << SLAM_fx, 0.f, SLAM_cx,
@@ -153,9 +158,11 @@ GaussianMapper::GaussianMapper(
             camera.height_ = undistort_params.old_size_.height;
             float y_ratio = static_cast<float>(camera.height_) / undistort_params.old_size_.height;
 
-            camera.num_gaus_pyramid_sub_levels_ = num_gaus_pyramid_sub_levels_;
+            camera.num_gaus_pyramid_sub_levels_ = num_gaus_pyramid_sub_levels_; // 高斯金字塔层数
+            // 调整存储下采样尺寸参数的容器长度
             camera.gaus_pyramid_width_.resize(num_gaus_pyramid_sub_levels_);
             camera.gaus_pyramid_height_.resize(num_gaus_pyramid_sub_levels_);
+            // 初始化高斯金字塔每个子层图像的长和宽
             for (int l = 0; l < num_gaus_pyramid_sub_levels_; ++l) {
                 camera.gaus_pyramid_width_[l] = camera.width_ * this->kf_gaus_pyramid_factors_[l];
                 camera.gaus_pyramid_height_[l] = camera.height_ * this->kf_gaus_pyramid_factors_[l];
@@ -166,6 +173,7 @@ GaussianMapper::GaussianMapper(
             camera.params_[2]/*new cx*/= SLAM_cx * x_ratio;
             camera.params_[3]/*new cy*/= SLAM_cy * y_ratio;
 
+            // 设置相机内参
             cv::Mat K_new = (
                 cv::Mat_<float>(3, 3)
                     << camera.params_[0], 0.f, camera.params_[2],
@@ -174,11 +182,13 @@ GaussianMapper::GaussianMapper(
             );
 
             // Undistortion
+            // 图像去畸变
             if (this->sensor_type_ == MONOCULAR || this->sensor_type_ == RGBD)
                 undistort_params.dist_coeff_.copyTo(camera.dist_coeff_);
 
             camera.initUndistortRectifyMapAndMask(K, SLAM_im_size, K_new, true);
 
+            // 转换数据格式：cv::Mat 变为 Tensor
             undistort_mask_[camera.camera_id_] =
                 tensor_utils::cvMat2TorchTensor_Float32(
                     camera.undistort_mask, device_type_);
@@ -215,6 +225,7 @@ GaussianMapper::GaussianMapper(
                 }
             }
         }
+        // 鱼眼相机
         else if (SLAM_camera->GetType() == ORB_SLAM3::GeometricCamera::CAM_FISHEYE) {
             camera.setModelId(Camera::CameraModelType::FISHEYE);
         }
@@ -385,7 +396,7 @@ void GaussianMapper::run()
                 std::unique_lock<std::mutex> lock_map(pMap->mMutexMapUpdate);
                 vpKFs = pMap->GetAllKeyFrames();  // 获取所有关键帧
                 vpMPs = pMap->GetAllMapPoints();  // 获取所有地图点
-                for (const auto& pMP : vpMPs){  // 遍历每个地图点，缓存其三维坐标和颜色
+                for (const auto& pMP : vpMPs){    // 遍历每个地图点，缓存其三维坐标和颜色
                     Point3D point3D;
                     auto pos = pMP->GetWorldPos();
                     point3D.xyz_(0) = pos.x();
@@ -482,7 +493,7 @@ void GaussianMapper::run()
             {
                 std::unique_lock<std::mutex> lock_render(mutex_render_);
                 scene_->cameras_extent_ = std::get<1>(scene_->getNerfppNorm());
-                gaussians_->createFromPcd(scene_->cached_point_cloud_, scene_->cameras_extent_);
+                gaussians_->createFromPcd(scene_->cached_point_cloud_, scene_->cameras_extent_); // 初始化高斯基元
                 std::unique_lock<std::mutex> lock(mutex_settings_);
                 gaussians_->trainingSetup(opt_params_);
             }
@@ -614,7 +625,7 @@ void GaussianMapper::trainColmap()
  */
 void GaussianMapper::trainForOneIteration()
 {
-    increaseIteration(1);
+    increaseIteration(1);  // 迭代轮数计数+1
     auto iter_start_timing = std::chrono::steady_clock::now();
 
     // Pick a random Camera
@@ -659,6 +670,7 @@ void GaussianMapper::trainForOneIteration()
         gaussians_->setShDegree(default_sh_);
 
     // Update learning rate
+    // 更新学习率
     if (pSLAM_) {
         int used_times = kfs_used_times_[viewpoint_cam->fid_];
         int step = (used_times <= opt_params_.position_lr_max_steps_ ? used_times : opt_params_.position_lr_max_steps_);
@@ -675,6 +687,7 @@ void GaussianMapper::trainForOneIteration()
     gaussians_->setRotationLearningRate(rotationLearningRate());
 
     // Render
+    // 渲染
     auto render_pkg = GaussianRenderer::render(
         viewpoint_cam,
         image_height,
@@ -697,7 +710,7 @@ void GaussianMapper::trainForOneIteration()
     float lambda_dssim = lambdaDssim();
     auto loss = (1.0 - lambda_dssim) * Ll1
                 + lambda_dssim * (1.0 - loss_utils::ssim(masked_image, gt_image, device_type_));
-    loss.backward();
+    loss.backward();  // 反向传播
 
     torch::cuda::synchronize(); // 等待GPU完成所有任务
 
@@ -710,6 +723,8 @@ void GaussianMapper::trainForOneIteration()
             recordKeyframeRendered(masked_image, gt_image, viewpoint_cam->fid_, result_dir_, result_dir_, result_dir_);
 
         // Densification
+        // 致密化
+        // 只有在迭代次数小于该阈值时，才会进行稠密化和修剪操作
         if (getIteration() < opt_params_.densify_until_iter_) {
             // Keep track of max radii in image-space for pruning
             gaussians_->max_radii2D_.index_put_(
@@ -718,7 +733,7 @@ void GaussianMapper::trainForOneIteration()
                             radii.index({visibility_filter})));
             // if (!isdoingGausPyramidTraining() || training_level < num_gaus_pyramid_sub_levels_)
                 gaussians_->addDensificationStats(viewspace_point_tensor, visibility_filter);
-
+            // 在达到某个迭代阈值（densify_from_iter_）之后，如果当前迭代次数是 densifyInterval() 的倍数，就会执行致密化和修剪
             if ((getIteration() > opt_params_.densify_from_iter_) &&
                 (getIteration() % densifyInterval()== 0)) {
                 int size_threshold = (getIteration() > prune_big_point_after_iter_) ? 20 : 0;
