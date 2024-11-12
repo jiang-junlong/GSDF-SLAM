@@ -284,8 +284,8 @@ __global__ void preprocessCUDA(int P, // 三维高斯的总数
   float lambda2 = mid - sqrt(max(0.1f, mid * mid - det));
   float my_radius = ceil(3.f * sqrt(max(lambda1, lambda2)));          // 用圆来近似椭圆，3sigma原则
   float2 point_image = {ndc2Pix(p_proj.x, W), ndc2Pix(p_proj.y, H)};  // 转换到图像坐标系
-  uint2 rect_min, rect_max;
-  getRect(point_image, my_radius, rect_min, rect_max, grid);
+  uint2 rect_min, rect_max;                                           
+  getRect(point_image, my_radius, rect_min, rect_max, grid);          // 求交，rect_min，rect_max 代表在 tile_grid 中的坐标
   if ((rect_max.x - rect_min.x) * (rect_max.y - rect_min.y) == 0)
     return;
 
@@ -302,7 +302,7 @@ __global__ void preprocessCUDA(int P, // 三维高斯的总数
 
   // Store some useful helper data for the next steps.
   depths[idx] = p_view.z;
-  radii[idx] = my_radius;
+  radii[idx] = my_radius;   // 存储二维高斯椭圆的最大半径
   points_xy_image[idx] = point_image;
 
   // Inverse 2D covariance and opacity neatly pack into one float4
