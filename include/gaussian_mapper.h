@@ -39,9 +39,6 @@
 
 #include <jsoncpp/json/json.h>
 
-#include "ORB-SLAM3/include/System.h"
-#include "ORB-SLAM3/Thirdparty/Sophus/sophus/se3.hpp"
-
 #include "operate_points.h"
 #include "stereo_vision.h"
 #include "tensor_utils.h"
@@ -100,7 +97,6 @@ class GaussianMapper
 {
 public:
     GaussianMapper(
-        std::shared_ptr<ORB_SLAM3::System> pSLAM,
         std::filesystem::path gaussian_config_file_path,
         std::filesystem::path result_dir = "",
         int seed = 0,
@@ -108,7 +104,6 @@ public:
 
     void readConfigFromFile(std::filesystem::path cfg_path);
 
-    void run();
     void trainColmap();
     void trainForOneIteration();
 
@@ -160,17 +155,12 @@ public:
     void setVaribleParameters(const VariableParameters &params);
 
     GaussianModelParams& getGaussianModelParams() { return this->model_params_; }
-    void setColmapDataPath(std::filesystem::path colmap_path) { this->model_params_.source_path_ = colmap_path; }
-    void setSensorType(SystemSensorType sensor_type) { this->sensor_type_ = sensor_type; }
+    void setColmapDataPath(std::filesystem::path colmap_path) { this->model_params_.source_path_ = colmap_path; }  // 需要保留
+    void setSensorType(SystemSensorType sensor_type) { this->sensor_type_ = sensor_type; } // 需要保留
 
     void loadPly(std::filesystem::path ply_path, std::filesystem::path camera_path = "");
 
 protected:
-    bool hasMetInitialMappingConditions();
-    bool hasMetIncrementalMappingConditions();
-
-    void combineMappingOperations();
-
     void handleNewKeyframe(std::tuple<unsigned long,
                                       unsigned long,
                                       Sophus::SE3f,
@@ -184,8 +174,6 @@ protected:
     std::shared_ptr<GaussianKeyframe> useOneRandomSlidingWindowKeyframe();
     std::shared_ptr<GaussianKeyframe> useOneRandomKeyframe();
     void increaseKeyframeTimesOfUse(std::shared_ptr<GaussianKeyframe> pkf, int times);
-    void cullKeyframes();
-
     void increasePcdByKeyframeInactiveGeoDensify(
         std::shared_ptr<GaussianKeyframe> pkf);
 
@@ -225,10 +213,6 @@ public:
     // Model
     std::shared_ptr<GaussianModel> gaussians_;
     std::shared_ptr<GaussianScene> scene_;
-
-    // SLAM system
-    std::shared_ptr<ORB_SLAM3::System> pSLAM_;
-
     // Settings
     torch::DeviceType device_type_;
     int num_gaus_pyramid_sub_levels_ = 0;

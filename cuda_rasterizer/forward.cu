@@ -196,7 +196,7 @@ __device__ void computeCov3D(const glm::vec3 scale,
 // 在光栅化之前，对每个高斯进行初始化
 template <int C>
 __global__ void preprocessCUDA(int P, // 三维高斯的总数
-                               int D, // 
+                               int D, //
                                int M,
                                const float *orig_points,
                                const glm::vec3 *scales,
@@ -222,12 +222,12 @@ __global__ void preprocessCUDA(int P, // 三维高斯的总数
                                float *depths,            // 深度值
                                float *cov3Ds,            // 三维高斯的协方差
                                float *rgb,               // 颜色值
-                               float4 *conic_opacity,    
-                               const dim3 grid,          // 网格维度
+                               float4 *conic_opacity,
+                               const dim3 grid, // 网格维度
                                uint32_t *tiles_touched,
-                               bool prefiltered)    
+                               bool prefiltered)
 {
-  auto idx = cg::this_grid().thread_rank();  // 获取每个线程的全局索引
+  auto idx = cg::this_grid().thread_rank(); // 获取每个线程的全局索引
   if (idx >= P)
     return;
 
@@ -244,10 +244,10 @@ __global__ void preprocessCUDA(int P, // 三维高斯的总数
     return;
 
   // Transform point by projecting
-  float3 p_orig = {orig_points[3 * idx], orig_points[3 * idx + 1], orig_points[3 * idx + 2]}; // 该线程处理高斯的中心
-  float4 p_hom = transformPoint4x4(p_orig, projmatrix);          // 将三维高斯转换到相机系，得到齐次坐标
+  float3 p_orig = {orig_points[3 * idx], orig_points[3 * idx + 1], orig_points[3 * idx + 2]};
+  float4 p_hom = transformPoint4x4(p_orig, projmatrix);                                       
   float p_w = 1.0f / (p_hom.w + 0.0000001f);
-  float3 p_proj = {p_hom.x * p_w, p_hom.y * p_w, p_hom.z * p_w}; // 相机系下三维高斯的中心坐标
+  float3 p_proj = {p_hom.x * p_w, p_hom.y * p_w, p_hom.z * p_w};
 
   // If 3D covariance matrix is precomputed, use it, otherwise compute
   // from scaling and rotation parameters.
@@ -268,11 +268,11 @@ __global__ void preprocessCUDA(int P, // 三维高斯的总数
 
   // Invert covariance (EWA algorithm)
   // 计算二维高斯协方差矩阵的逆
-  float det = (cov.x * cov.z - cov.y * cov.y);  // 计算二维高斯协方差的行列式
-  if (det == 0.0f)  // 非满秩，直接返回
+  float det = (cov.x * cov.z - cov.y * cov.y); // 计算二维高斯协方差的行列式
+  if (det == 0.0f)                             // 非满秩，直接返回
     return;
   float det_inv = 1.f / det;
-  float3 conic = {cov.z * det_inv, -cov.y * det_inv, cov.x * det_inv};  // 二维协方差矩阵的逆
+  float3 conic = {cov.z * det_inv, -cov.y * det_inv, cov.x * det_inv}; // 二维协方差矩阵的逆
 
   // Compute extent in screen space (by finding eigenvalues of
   // 2D covariance matrix). Use extent to compute a bounding rectangle
@@ -282,10 +282,10 @@ __global__ void preprocessCUDA(int P, // 三维高斯的总数
   // 计算二维协方差矩阵的特征值
   float lambda1 = mid + sqrt(max(0.1f, mid * mid - det));
   float lambda2 = mid - sqrt(max(0.1f, mid * mid - det));
-  float my_radius = ceil(3.f * sqrt(max(lambda1, lambda2)));          // 用圆来近似椭圆，3sigma原则
-  float2 point_image = {ndc2Pix(p_proj.x, W), ndc2Pix(p_proj.y, H)};  // 转换到图像坐标系
-  uint2 rect_min, rect_max;                                           
-  getRect(point_image, my_radius, rect_min, rect_max, grid);          // 求交，rect_min，rect_max 代表在 tile_grid 中的坐标
+  float my_radius = ceil(3.f * sqrt(max(lambda1, lambda2)));         // 椭圆的边界圆，3sigma原则
+  float2 point_image = {ndc2Pix(p_proj.x, W), ndc2Pix(p_proj.y, H)}; // 将归一化设备坐标 (NDC, Normalized Device Coordinates) 转换为像素坐标
+  uint2 rect_min, rect_max;
+  getRect(point_image, my_radius, rect_min, rect_max, grid); // 求tile grid和边界圆的交，rect_min，rect_max 代表在 tile_grid 中的坐标
   if ((rect_max.x - rect_min.x) * (rect_max.y - rect_min.y) == 0)
     return;
 
@@ -302,11 +302,11 @@ __global__ void preprocessCUDA(int P, // 三维高斯的总数
 
   // Store some useful helper data for the next steps.
   depths[idx] = p_view.z;
-  radii[idx] = my_radius;   // 存储二维高斯椭圆的最大半径
+  radii[idx] = my_radius; // 存储二维高斯椭圆的最大半径
   points_xy_image[idx] = point_image;
 
   // Inverse 2D covariance and opacity neatly pack into one float4
-  conic_opacity[idx] = {conic.x, conic.y, conic.z, opacities[idx]};
+  conic_opacity[idx] = {conic.x, conic.y, conic.z, opacities[idx]}; // 二维协方差的逆和透明度
   tiles_touched[idx] = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
 }
 
@@ -500,7 +500,7 @@ void FORWARD::render(const dim3 grid,
       max_contrib, bg_color, out_color);
 }
 
-void FORWARD::preprocess(int P,
+void FORWARD::preprocess(int P, // 三维高斯的总数
                          int D,
                          int M,
                          const float *means3D,
@@ -532,6 +532,9 @@ void FORWARD::preprocess(int P,
                          uint32_t *tiles_touched,
                          bool prefiltered)
 {
+  // 封装preprocessCUDA核函数以处理三维高斯渲染的预处理步骤
+  // 根据P（三维高斯的总数）和块大小256动态确定CUDA网格(grid)和块(block)数量
+  // 调用CUDA核函数预处理三维高斯分布的每个参数, 为渲染做好准备
   preprocessCUDA<NUM_CHAFFELS><<<(P + 255) / 256, 256>>>(
       P, D, M, means3D, scales, scale_modifier, rotations, opacities, dc, shs,
       clamped, cov3D_precomp, colors_precomp, viewmatrix, projmatrix, cam_pos,
