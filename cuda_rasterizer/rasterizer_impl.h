@@ -32,17 +32,17 @@ static void obtain(char*& chunk,
 }
 
 struct GeometryState {
-  size_t scan_size;
-  float* depths;
-  char* scanning_space;
-  bool* clamped;
-  int* internal_radii;
-  float2* means2D;
-  float* cov3D;
-  float4* conic_opacity;
-  float* rgb;
-  uint32_t* point_offsets;
-  uint32_t* tiles_touched;
+  size_t scan_size;         // 计算前缀和（扫描）时的temp_storage_bytes，即辅助空间大小
+  float* depths;            // 对于所有的高斯，在图像坐标系下的深度
+  char* scanning_space;     // 计算前缀和（扫描）时的d_temp_storage，即辅助空间的起始指针
+  bool* clamped;            // 对于所有的高斯，预处理从 SH 算 RGB 的时候被裁剪到正值，keep track of this for the backward pass
+  int* internal_radii;      // 对于所有的高斯，在图像坐标系下估计为圆的半径
+  float2* means2D;          // 图像坐标系下所有高斯的均值
+  float* cov3D;             // 对于所有高斯，世界坐标系下的协方差
+  float4* conic_opacity;    // 对于所有高斯，图像坐标系下2D协方差矩阵的逆和不透明度
+  float* rgb;               // 对于所有高斯，预处理从SH算RGB的结果
+  uint32_t* point_offsets;  // 每个高斯触碰tiles个数的前缀和，也就是偏移量
+  uint32_t* tiles_touched;  // 每个高斯触碰的tiles个数
 
   static GeometryState fromChunk(char*& chunk, size_t P);
 };

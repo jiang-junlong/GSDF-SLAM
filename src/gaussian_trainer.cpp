@@ -107,7 +107,7 @@ void GaussianTrainer::trainingOnce(
                 background
             );
 
-            // Densification
+            // Densification  致密化
             if (iteration < opt.densify_until_iter_) {
                 // Keep track of max radii in image-space for pruning
                 gaussians->max_radii2D_.index_put_(

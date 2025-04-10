@@ -27,9 +27,6 @@
 #include <unordered_map>
 
 #include <opencv2/opencv.hpp>
-
-#include "ORB-SLAM3/include/System.h"
-
 #include "loss_utils.h"
 #include "gaussian_parameters.h"
 #include "gaussian_model.h"

@@ -61,25 +61,26 @@ __device__ inline float evaluate_opacity_factor(const float dx,
 
 template <uint32_t PATCH_WIDTH, uint32_t PATCH_HEIGHT>
 __device__ inline float max_contrib_power_rect_gaussian_float(
-    const float4 co,
-    const float2 mean,
-    const glm::vec2 rect_min,
-    const glm::vec2 rect_max,
-    glm::vec2& max_pos) {
+    const float4 co,               // 2D高斯分布的协方差矩阵参数
+    const float2 mean,             // 2D高斯分布的均值
+    const glm::vec2 rect_min,      // 矩阵区域的左上角
+    const glm::vec2 rect_max,      // 矩阵区域的右下角
+    glm::vec2& max_pos) {          // 输出：最大贡献的高斯位置 
   const float x_min_diff = rect_min.x - mean.x;
   const float x_left = x_min_diff > 0.0f;
   // const float x_left = mean.x < rect_min.x;
-  const float not_in_x_range = x_left + (mean.x > rect_max.x);
+  const float not_in_x_range = x_left + (mean.x > rect_max.x);  // 不在x范围内
 
   const float y_min_diff = rect_min.y - mean.y;
   const float y_above = y_min_diff > 0.0f;
   // const float y_above = mean.y < rect_min.y;
-  const float not_in_y_range = y_above + (mean.y > rect_max.y);
+  const float not_in_y_range = y_above + (mean.y > rect_max.y); // 不在y范围内
 
   max_pos = {mean.x, mean.y};
   float max_contrib_power = 0.0f;
 
-  if ((not_in_y_range + not_in_x_range) > 0.0f) {
+  if ((not_in_y_range + not_in_x_range) > 0.0f) {               // 如果高斯中心在矩形区域外
+    // 计算离高斯中心最近的矩形区域的点
     const float px = x_left * rect_min.x + (1.0f - x_left) * rect_max.x;
     const float py = y_above * rect_min.y + (1.0f - y_above) * rect_max.y;
 
@@ -130,14 +131,14 @@ __global__ void checkFrustum(int P,
 __global__ void duplicateWithKeys(int P,
                                   const float2* points_xy,
                                   const float4* __restrict__ conic_opacity,
-                                  const float* depths,
+                                  const float* depths,                // 投影深度
                                   const uint32_t* offsets,
-                                  uint64_t* gaussian_keys_unsorted,
-                                  uint32_t* gaussian_values_unsorted,
-                                  int* radii,
+                                  uint64_t* gaussian_keys_unsorted,   // 未排序的key [ tile | depth ]
+                                  uint32_t* gaussian_values_unsorted, // 未排序的value [ 3D Gaussian ID ]
+                                  int* radii,                         // 高斯球的半径
                                   dim3 grid,
                                   int2* rects) {
-  auto idx = cg::this_grid().thread_rank();
+  auto idx = cg::this_grid().thread_rank();  // 线程索引，该显线程处理第idx个Gaussian
   if (idx >= P) return;
 
   // Generate no key/value pair for invisible Gaussians
@@ -164,8 +165,8 @@ __global__ void duplicateWithKeys(int P,
     // are first sorted by tile and then by depth.
     for (int y = rect_min.y; y < rect_max.y; y++) {
       for (int x = rect_min.x; x < rect_max.x; x++) {
-        const glm::vec2 tile_min(x * BLOCK_X, y * BLOCK_Y);
-        const glm::vec2 tile_max((x + 1) * BLOCK_X - 1, (y + 1) * BLOCK_Y - 1);
+        const glm::vec2 tile_min(x * BLOCK_X, y * BLOCK_Y);                       // tile左上角
+        const glm::vec2 tile_max((x + 1) * BLOCK_X - 1, (y + 1) * BLOCK_Y - 1);   // tile右下角
 
         glm::vec2 max_pos;
         float max_opac_factor = 0.0f;
@@ -173,10 +174,10 @@ __global__ void duplicateWithKeys(int P,
             max_contrib_power_rect_gaussian_float<BLOCK_X - 1, BLOCK_Y - 1>(
                 co, xy, tile_min, tile_max, max_pos);
 
-        uint64_t key = y * grid.x + x;
+        uint64_t key = y * grid.x + x;  // tile ID
         key <<= 32;
-        key |= *((uint32_t*)&depths[idx]);
-        if (max_opac_factor <= opacity_factor_threshold) {
+        key |= *((uint32_t*)&depths[idx]);  // depth
+        if (max_opac_factor <= opacity_factor_threshold) { // 透明度因子小于阈值
           gaussian_keys_unsorted[off] = key;
           gaussian_values_unsorted[off] = idx;
           off++;
@@ -333,34 +334,36 @@ std::tuple<int, int> CudaRasterizer::Rasterizer::forward(
     std::function<char*(size_t)> binningBuffer,
     std::function<char*(size_t)> imageBuffer,
     std::function<char*(size_t)> sampleBuffer,
-    const int P,
-    int D,
-    int M,
+    //上面的三个参数是用于分配缓冲区的函数。在submodules/diff-gaussian-rasterization/rasterize_points.cu中定义
+    const int P,                 // 高斯的数量
+    int D,                       // 对应于GaussianModel.active_sh_degree，是球谐度数
+    int M,                       // RGB三通道的球谐傅里叶系数个数，应等于 3*(D+1)^2
     const float* background,
-    const int width,
-    int height,
-    const float* means3D,
+    const int width,             // 图像宽
+    int height,                  // 图像高
+    const float* means3D,        // 高斯的中心点坐标
     const float* dc,
-    const float* shs,
-    const float* colors_precomp,
-    const float* opacities,
-    const float* scales,
-    const float scale_modifier,
-    const float* rotations,
-    const float* cov3D_precomp,
-    const float* viewmatrix,
-    const float* projmatrix,
-    const float* cam_pos,
-    const float tan_fovx,
-    float tan_fovy,
+    const float* shs,            // 球谐系数
+    const float* colors_precomp, // 预先计算的颜色
+    const float* opacities,      // 不透明度
+    const float* scales,         // 高斯的缩放系数
+    const float scale_modifier,  // 缩放系数的修改值
+    const float* rotations,      // 高斯的旋转矩阵
+    const float* cov3D_precomp,  // 预先计算的三维协方差矩阵
+    const float* viewmatrix,     // W2C矩阵
+    const float* projmatrix,     // 投影矩阵
+    const float* cam_pos,        // 相机位置
+    const float tan_fovx,        // 水平视场角一半的正切值
+    float tan_fovy,              // 垂直视场角一半的正切值
     const bool prefiltered,
-    float* out_color,
-    int* radii,
+    float* out_color,            // 输出的颜色
+    int* radii,                  // 各高斯在图像平面上用3sigma原则截取后得到的半径
     bool debug) {
   const float focal_y = height / (2.0f * tan_fovy);
   const float focal_x = width / (2.0f * tan_fovx);
 
-  size_t chunk_size = required<GeometryState>(P);
+  // 初始化一些缓存区
+  size_t chunk_size = required<GeometryState>(P);  // 计算GeometryState所需的内存大小
   char* chunkptr = geometryBuffer(chunk_size);
   GeometryState geomState = GeometryState::fromChunk(chunkptr, P);
 
@@ -378,12 +381,13 @@ std::tuple<int, int> CudaRasterizer::Rasterizer::forward(
   ImageState imgState = ImageState::fromChunk(img_chunkptr, width * height);
 
   if (NUM_CHAFFELS != 3 && colors_precomp == nullptr) {
-    throw std::runtime_error(
-        "For non-RGB, provide precomputed Gaussian colors!");
+    throw std::runtime_error("For non-RGB, provide precomputed Gaussian colors!");
   }
 
-  // Run preprocessing per-Gaussian (transformation, bounding, conversion of SHs
-  // to RGB)
+  // Run preprocessing per-Gaussian (transformation, bounding, conversion of SHs to RGB)
+  // 预处理：将每个高斯投影到图像平面上
+  // FORWARD 空间里面的基本都是 kernel function（那些带 < <<xxx, yyy> > 的调用）了，CUDA 会把资源分成 block 级别(tile) 和 thread 级别(each pixel in a tile)，
+  // 每个 thread 全部并行地去做下面的代码，通过一些标识函数找到自己的位置。粗浅的引入可参考 https://zhuanlan.zhihu.com/p/129375374
   CHECK_CUDA(FORWARD::preprocess(
                  P, D, M, means3D, (glm::vec3*)scales, scale_modifier,
                  (glm::vec4*)rotations, opacities, dc, shs, geomState.clamped,
@@ -392,17 +396,23 @@ std::tuple<int, int> CudaRasterizer::Rasterizer::forward(
                  tan_fovy, radii, geomState.means2D, geomState.depths,
                  geomState.cov3D, geomState.rgb, geomState.conic_opacity,
                  tile_grid, geomState.tiles_touched, prefiltered),
-             debug)
+                 debug)
 
   // Compute prefix sum over full list of touched tile counts by Gaussians
   // E.g., [2, 3, 0, 2, 1] -> [2, 5, 5, 7, 8]
+  // 生成Idx, 计算数组前缀和
+  // CHECK_CUDA(cub::DeviceScan::InclusiveSum(
+  //    d_temp_storage, temp_storage_bytes, 
+  //    d_input, d_output, num_items, stream));
+
   CHECK_CUDA(cub::DeviceScan::InclusiveSum(
-                 geomState.scanning_space, geomState.scan_size,
-                 geomState.tiles_touched, geomState.point_offsets, P),
-             debug)
+                 geomState.scanning_space, geomState.scan_size,          // 临时存储空间的起始地址和大小
+                 geomState.tiles_touched, geomState.point_offsets, P),   // 输入指针，输出指针，数据个数
+                 debug)
 
   // Retrieve total number of Gaussian instances to launch and resize aux
   // buffers
+  // 生成key-value,其中key是 [ tile | depth ]，key是一个uint64_t，前32位表示tile id，后32位表示投影深度；value是3D gaussian的id.
   int num_rendered;
   CHECK_CUDA(cudaMemcpy(&num_rendered, geomState.point_offsets + P - 1,
                         sizeof(int), cudaMemcpyDeviceToHost),
@@ -421,9 +431,10 @@ std::tuple<int, int> CudaRasterizer::Rasterizer::forward(
       binningState.point_list_unsorted, radii, tile_grid, nullptr)
       CHECK_CUDA(, debug)
 
-          int bit = getHigherMsb(tile_grid.x * tile_grid.y);
+  int bit = getHigherMsb(tile_grid.x * tile_grid.y);  // 查找最高有效位
 
   // Sort complete list of (duplicated) Gaussian indices by keys
+  // device级别的并行基数排序
   CHECK_CUDA(cub::DeviceRadixSort::SortPairs(
                  binningState.list_sorting_space, binningState.sorting_size,
                  binningState.point_list_keys_unsorted,
@@ -431,9 +442,8 @@ std::tuple<int, int> CudaRasterizer::Rasterizer::forward(
                  binningState.point_list, num_rendered, 0, 32 + bit),
              debug)
 
-  CHECK_CUDA(
-      cudaMemset(imgState.ranges, 0, tile_grid.x * tile_grid.y * sizeof(uint2)),
-      debug);
+  // 排序后处理
+  CHECK_CUDA(cudaMemset(imgState.ranges, 0, tile_grid.x * tile_grid.y * sizeof(uint2)), debug);
 
   // Identify start and end of per-tile workloads in sorted list
   if (num_rendered > 0)

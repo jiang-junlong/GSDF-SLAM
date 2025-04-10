@@ -23,15 +23,13 @@
 #include <torch/torch.h>
 #include <opencv2/opencv.hpp>
 #include <Eigen/Geometry>
-
-#include "ORB-SLAM3/Thirdparty/Sophus/sophus/se3.hpp"
-
 #include "types.h"
 #include "camera.h"
 #include "point2d.h"
 #include "general_utils.h"
 #include "graphics_utils.h"
 #include "tensor_utils.h"
+#include "third_party/Sophus/sophus/se3.hpp"
 
 class GaussianKeyframe
 {

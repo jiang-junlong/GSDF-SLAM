@@ -24,8 +24,7 @@
 #include <torch/torch.h>
 #include <c10/cuda/CUDACachingAllocator.h>
 
-#include "ORB-SLAM3/Thirdparty/Sophus/sophus/se3.hpp"
-
+#include "third_party/Sophus/sophus/se3.hpp"
 #include "third_party/simple-knn/spatial.h"
 #include "third_party/tinyply/tinyply.h"
 #include "types.h"
