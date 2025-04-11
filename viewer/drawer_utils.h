@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "ORB-SLAM3/Thirdparty/Sophus/sophus/se3.hpp"
+#include "third_party/Sophus/sophus/se3.hpp"
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"

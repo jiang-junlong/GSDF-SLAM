@@ -83,38 +83,24 @@ void GaussianMapper::readConfigFromFile(std::filesystem::path cfg_path)
     std::unique_lock<std::mutex> lock(mutex_settings_);
 
     // Model parameters
-    model_params_.sh_degree_ =
-        settings_file["Model.sh_degree"].operator int();
-    model_params_.resolution_ =
-        settings_file["Model.resolution"].operator float();
-    model_params_.white_background_ =
-        (settings_file["Model.white_background"].operator int()) != 0;
-    model_params_.eval_ =
-        (settings_file["Model.eval"].operator int()) != 0;
+    model_params_.sh_degree_ = settings_file["Model.sh_degree"].operator int();
+    model_params_.resolution_ = settings_file["Model.resolution"].operator float();
+    model_params_.white_background_ = (settings_file["Model.white_background"].operator int()) != 0;
+    model_params_.eval_ = (settings_file["Model.eval"].operator int()) != 0;
 
     // Pipeline Parameters
-    z_near_ =
-        settings_file["Camera.z_near"].operator float();
-    z_far_ =
-        settings_file["Camera.z_far"].operator float();
+    z_near_ = settings_file["Camera.z_near"].operator float();
+    z_far_ = settings_file["Camera.z_far"].operator float();
 
-    monocular_inactive_geo_densify_max_pixel_dist_ =
-        settings_file["Monocular.inactive_geo_densify_max_pixel_dist"].operator float();
-    stereo_min_disparity_ =
-        settings_file["Stereo.min_disparity"].operator int();
-    stereo_num_disparity_ =
-        settings_file["Stereo.num_disparity"].operator int();
-    RGBD_min_depth_ =
-        settings_file["RGBD.min_depth"].operator float();
-    RGBD_max_depth_ =
-        settings_file["RGBD.max_depth"].operator float();
+    monocular_inactive_geo_densify_max_pixel_dist_ = settings_file["Monocular.inactive_geo_densify_max_pixel_dist"].operator float();
+    stereo_min_disparity_ = settings_file["Stereo.min_disparity"].operator int();
+    stereo_num_disparity_ = settings_file["Stereo.num_disparity"].operator int();
+    RGBD_min_depth_ = settings_file["RGBD.min_depth"].operator float();
+    RGBD_max_depth_ = settings_file["RGBD.max_depth"].operator float();
 
-    inactive_geo_densify_ =
-        (settings_file["Mapper.inactive_geo_densify"].operator int()) != 0;
-    max_depth_cached_ =
-        settings_file["Mapper.depth_cache"].operator int();
-    min_num_initial_map_kfs_ = 
-        static_cast<unsigned long>(settings_file["Mapper.min_num_initial_map_kfs"].operator int());
+    inactive_geo_densify_ = (settings_file["Mapper.inactive_geo_densify"].operator int()) != 0;
+    max_depth_cached_ = settings_file["Mapper.depth_cache"].operator int();
+    min_num_initial_map_kfs_ = static_cast<unsigned long>(settings_file["Mapper.min_num_initial_map_kfs"].operator int());
     new_keyframe_times_of_use_ = 
         settings_file["Mapper.new_keyframe_times_of_use"].operator int();
     local_BA_increased_times_of_use_ = 
@@ -210,6 +196,179 @@ void GaussianMapper::readConfigFromFile(std::filesystem::path cfg_path)
         settings_file["GaussianViewer.image_scale_main"].operator float();
 }
 
+// void GaussianMapper::run()
+// {
+//     // First loop: Initial gaussian mapping
+//     while (!isStopped()) {
+//         // Check conditions for initial mapping
+//         if (hasMetInitialMappingConditions()) {
+//             pSLAM_->getAtlas()->clearMappingOperation();
+
+//             // Get initial sparse map
+//             auto pMap = pSLAM_->getAtlas()->GetCurrentMap();
+//             std::vector<ORB_SLAM3::KeyFrame*> vpKFs;
+//             std::vector<ORB_SLAM3::MapPoint*> vpMPs;
+//             {
+//                 std::unique_lock<std::mutex> lock_map(pMap->mMutexMapUpdate);
+//                 vpKFs = pMap->GetAllKeyFrames();
+//                 vpMPs = pMap->GetAllMapPoints(); // 获取所有地图点
+//                 for (const auto& pMP : vpMPs){
+//                     Point3D point3D;
+//                     auto pos = pMP->GetWorldPos();
+//                     point3D.xyz_(0) = pos.x();
+//                     point3D.xyz_(1) = pos.y();
+//                     point3D.xyz_(2) = pos.z();
+//                     auto color = pMP->GetColorRGB();
+//                     point3D.color_(0) = color(0);
+//                     point3D.color_(1) = color(1);
+//                     point3D.color_(2) = color(2);
+//                     scene_->cachePoint3D(pMP->mnId, point3D); // 缓存地图点
+//                 }
+//                 for (const auto& pKF : vpKFs){
+//                     std::shared_ptr<GaussianKeyframe> new_kf = std::make_shared<GaussianKeyframe>(pKF->mnId, getIteration());
+//                     new_kf->zfar_ = z_far_;
+//                     new_kf->znear_ = z_near_;
+//                     // Pose
+//                     auto pose = pKF->GetPose();
+//                     new_kf->setPose(
+//                         pose.unit_quaternion().cast<double>(),
+//                         pose.translation().cast<double>());
+//                     cv::Mat imgRGB_undistorted, imgAux_undistorted;
+//                     try {
+//                         // Camera
+//                         Camera& camera = scene_->cameras_.at(pKF->mpCamera->GetId());
+//                         new_kf->setCameraParams(camera);
+
+//                         // Image (left if STEREO)
+//                         cv::Mat imgRGB = pKF->imgLeftRGB;
+//                         if (this->sensor_type_ == STEREO)
+//                             imgRGB_undistorted = imgRGB;
+//                         else
+//                             camera.undistortImage(imgRGB, imgRGB_undistorted);
+//                         // Auxiliary Image
+//                         cv::Mat imgAux = pKF->imgAuxiliary;
+//                         if (this->sensor_type_ == RGBD)
+//                             camera.undistortImage(imgAux, imgAux_undistorted);
+//                         else
+//                             imgAux_undistorted = imgAux;
+
+//                         new_kf->original_image_ =
+//                             tensor_utils::cvMat2TorchTensor_Float32(imgRGB_undistorted, device_type_);
+//                         new_kf->img_filename_ = pKF->mNameFile;
+//                         new_kf->gaus_pyramid_height_ = camera.gaus_pyramid_height_;
+//                         new_kf->gaus_pyramid_width_ = camera.gaus_pyramid_width_;
+//                         new_kf->gaus_pyramid_times_of_use_ = kf_gaus_pyramid_times_of_use_;
+//                     }
+//                     catch (std::out_of_range) {
+//                         throw std::runtime_error("[GaussianMapper::run]KeyFrame Camera not found!");
+//                     }
+//                     new_kf->computeTransformTensors();
+//                     scene_->addKeyframe(new_kf, &kfid_shuffled_);
+
+//                     increaseKeyframeTimesOfUse(new_kf, newKeyframeTimesOfUse());
+
+//                     // Features
+//                     std::vector<float> pixels;
+//                     std::vector<float> pointsLocal;
+//                     pKF->GetKeypointInfo(pixels, pointsLocal);
+//                     new_kf->kps_pixel_ = std::move(pixels);
+//                     new_kf->kps_point_local_ = std::move(pointsLocal);
+//                     new_kf->img_undist_ = imgRGB_undistorted;
+//                     new_kf->img_auxiliary_undist_ = imgAux_undistorted;
+//                 }
+//             }
+
+//             // Prepare multi resolution images for training
+//             for (auto& kfit : scene_->keyframes()) {
+//                 auto pkf = kfit.second;
+//                 if (device_type_ == torch::kCUDA) {
+//                     cv::cuda::GpuMat img_gpu;
+//                     img_gpu.upload(pkf->img_undist_);
+//                     pkf->gaus_pyramid_original_image_.resize(num_gaus_pyramid_sub_levels_);
+//                     for (int l = 0; l < num_gaus_pyramid_sub_levels_; ++l) {
+//                         cv::cuda::GpuMat img_resized;
+//                         cv::cuda::resize(img_gpu, img_resized,
+//                                         cv::Size(pkf->gaus_pyramid_width_[l], pkf->gaus_pyramid_height_[l]));
+//                         pkf->gaus_pyramid_original_image_[l] =
+//                             tensor_utils::cvGpuMat2TorchTensor_Float32(img_resized);
+//                     }
+//                 }
+//                 else {
+//                     pkf->gaus_pyramid_original_image_.resize(num_gaus_pyramid_sub_levels_);
+//                     for (int l = 0; l < num_gaus_pyramid_sub_levels_; ++l) {
+//                         cv::Mat img_resized;
+//                         cv::resize(pkf->img_undist_, img_resized,
+//                                 cv::Size(pkf->gaus_pyramid_width_[l], pkf->gaus_pyramid_height_[l]));
+//                         pkf->gaus_pyramid_original_image_[l] =
+//                             tensor_utils::cvMat2TorchTensor_Float32(img_resized, device_type_);
+//                     }
+//                 }
+//             }
+
+//             // Prepare for training
+//             {
+//                 std::unique_lock<std::mutex> lock_render(mutex_render_);
+//                 scene_->cameras_extent_ = std::get<1>(scene_->getNerfppNorm());
+//                 gaussians_->createFromPcd(scene_->cached_point_cloud_, scene_->cameras_extent_); // 从缓存点云中创建gaussians
+//                 std::unique_lock<std::mutex> lock(mutex_settings_);
+//                 gaussians_->trainingSetup(opt_params_);
+//             }
+
+//             // Invoke training once
+//             trainForOneIteration();
+
+//             // Finish initial mapping loop
+//             initial_mapped_ = true;
+//             break;
+//         }
+//         else if (pSLAM_->isShutDown()) {
+//             break;
+//         }
+//         else {
+//             // Initial conditions not satisfied
+//             std::this_thread::sleep_for(std::chrono::milliseconds(1));
+//         }
+//     }
+
+//     // Second loop: Incremental gaussian mapping
+//     int SLAM_stop_iter = 0;
+//     while (!isStopped()) {
+//         // Check conditions for incremental mapping
+//         if (hasMetIncrementalMappingConditions()) {
+//             combineMappingOperations();
+//             if (cull_keyframes_)
+//                 cullKeyframes();
+//         }
+
+//         // Invoke training once
+//         trainForOneIteration();
+
+//         if (pSLAM_->isShutDown()) {
+//             SLAM_stop_iter = getIteration();
+//             SLAM_ended_ = true;
+//         }
+
+//         if (SLAM_ended_ || getIteration() >= opt_params_.iterations_)
+//             break;
+//     }
+
+//     // Third loop: Tail gaussian optimization
+//     int densify_interval = densifyInterval();
+//     int n_delay_iters = densify_interval * 0.8;
+//     while (getIteration() - SLAM_stop_iter <= n_delay_iters || getIteration() % densify_interval <= n_delay_iters || isKeepingTraining()) {
+//         trainForOneIteration();
+//         densify_interval = densifyInterval();
+//         n_delay_iters = densify_interval * 0.8;
+//     }
+
+//     // Save and clear
+//     renderAndRecordAllKeyframes("_shutdown");
+//     savePly(result_dir_ / (std::to_string(getIteration()) + "_shutdown") / "ply");
+//     writeKeyframeUsedTimes(result_dir_ / "used_times", "final");
+
+//     signalStop();
+// }
+
 void GaussianMapper::trainColmap()
 {
     // Prepare multi resolution images for training
@@ -218,12 +377,11 @@ void GaussianMapper::trainColmap()
         increaseKeyframeTimesOfUse(pkf, newKeyframeTimesOfUse());
         if (device_type_ == torch::kCUDA) {
             cv::cuda::GpuMat img_gpu;
-            img_gpu.upload(pkf->img_undist_);
-            pkf->gaus_pyramid_original_image_.resize(num_gaus_pyramid_sub_levels_);
+            img_gpu.upload(pkf->img_undist_); // 上传图片到GPU
+            pkf->gaus_pyramid_original_image_.resize(num_gaus_pyramid_sub_levels_); // 设置图像金字塔容器大小
             for (int l = 0; l < num_gaus_pyramid_sub_levels_; ++l) {
                 cv::cuda::GpuMat img_resized;
-                cv::cuda::resize(img_gpu, img_resized,
-                                cv::Size(pkf->gaus_pyramid_width_[l], pkf->gaus_pyramid_height_[l]));
+                cv::cuda::resize(img_gpu, img_resized, cv::Size(pkf->gaus_pyramid_width_[l], pkf->gaus_pyramid_height_[l]));
                 pkf->gaus_pyramid_original_image_[l] =
                     tensor_utils::cvGpuMat2TorchTensor_Float32(img_resized);
             }
@@ -330,15 +488,12 @@ void GaussianMapper::trainForOneIteration()
     // 更新学习率
 
     gaussians_->updateLearningRate(getIteration());
-    
-
     gaussians_->setFeatureLearningRate(featureLearningRate());
     gaussians_->setOpacityLearningRate(opacityLearningRate());
     gaussians_->setScalingLearningRate(scalingLearningRate());
     gaussians_->setRotationLearningRate(rotationLearningRate());
 
-    // Render
-    // 渲染
+    // Render 渲染
     auto render_pkg = GaussianRenderer::render(
         viewpoint_cam,
         image_height,
@@ -356,7 +511,7 @@ void GaussianMapper::trainForOneIteration()
     // Get rid of black edges caused by undistortion
     torch::Tensor masked_image = rendered_image * mask;
 
-    // Loss
+    // Loss 计算损失
     auto Ll1 = loss_utils::l1_loss(masked_image, gt_image);
     float lambda_dssim = lambdaDssim();
     auto loss = (1.0 - lambda_dssim) * Ll1
@@ -373,8 +528,7 @@ void GaussianMapper::trainForOneIteration()
             getIteration() % keyframe_record_interval_ == 0)
             recordKeyframeRendered(masked_image, gt_image, viewpoint_cam->fid_, result_dir_, result_dir_, result_dir_);
 
-        // Densification
-        // 致密化
+        // Densification 致密化
         // 只有在迭代次数小于该阈值时，才会进行稠密化和修剪操作
         if (getIteration() < opt_params_.densify_until_iter_) {
             // Keep track of max radii in image-space for pruning
@@ -451,10 +605,6 @@ void GaussianMapper::signalStop(const bool going_to_stop)
     std::unique_lock<std::mutex> lock_status(this->mutex_status_);
     this->stopped_ = going_to_stop;
 }
-
-
-
-
 
 void GaussianMapper::handleNewKeyframe(
     std::tuple< unsigned long/*Id*/,
@@ -1094,7 +1244,7 @@ void GaussianMapper::savePly(std::filesystem::path result_dir)
     CHECK_DIRECTORY_AND_CREATE_IF_NOT_EXISTS(ply_dir)
 
     gaussians_->savePly(ply_dir / "point_cloud.ply");
-    gaussians_->saveSparsePointsPly(result_dir / "input.ply");
+    // gaussians_->saveSparsePointsPly(result_dir / "input.ply");     // 这个应该是为ORBSLAM服务的
 }
 
 void GaussianMapper::keyframesToJson(std::filesystem::path result_dir)

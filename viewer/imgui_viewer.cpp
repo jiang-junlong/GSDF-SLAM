@@ -24,7 +24,6 @@ static void glfw_error_callback(int error, const char* description)
 }
 
 ImGuiViewer::ImGuiViewer(
-    std::shared_ptr<ORB_SLAM3::System> pSLAM,
     std::shared_ptr<GaussianMapper> pGausMapper,
     bool training)
     : glfw_window_width_(1600),
@@ -36,30 +35,14 @@ ImGuiViewer::ImGuiViewer(
       SLAM_image_viewer_scale_(1.0f),
       training_(training)
 {
-    this->pSLAM_ = pSLAM;
     this->pGausMapper_ = pGausMapper;
 
     cv::Size im_size;
-    if (pSLAM)
-    {
-        // ORB_SLAM3 settings
-        ORB_SLAM3::Settings* settings = pSLAM->getSettings();
+ 
+    image_height_ = pGausMapper->scene_->cameras_.begin()->second.height_;
+    image_width_ = pGausMapper->scene_->cameras_.begin()->second.width_;
+    viewpointF_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
 
-        im_size = settings->newImSize();
-        image_height_ = im_size.height;
-        image_width_ = im_size.width;
-
-        viewpointX_ = settings->viewPointX();
-        viewpointY_ = settings->viewPointY();
-        viewpointZ_ = settings->viewPointZ();
-        viewpointF_ = settings->camera1()->getParameter(1);
-    }
-    else
-    {
-        image_height_ = pGausMapper->scene_->cameras_.begin()->second.height_;
-        image_width_ = pGausMapper->scene_->cameras_.begin()->second.width_;
-        viewpointF_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
-    }
 
     main_fx_ = pGausMapper->scene_->cameras_.begin()->second.params_[0];
     main_fy_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
@@ -81,14 +64,6 @@ ImGuiViewer::ImGuiViewer(
     cam_view_ = glm::lookAt(cam_pos_, cam_target_, up_);
     cam_trans_ = cam_proj_ * cam_view_;
 
-    // Create drawers
-    if (pSLAM)
-    {
-        pSlamFrameDrawer_ = pSLAM->getFrameDrawer();
-        pSlamMapDrawer_ = pSLAM->getMapDrawer();
-        pMapDrawer_ = std::make_shared<ORB_SLAM3::ImGuiMapDrawer>(
-            pSLAM->getAtlas(), std::string(), pSLAM->getSettings());
-    }
 }
 
 void ImGuiViewer::readConfigFromFile(std::filesystem::path cfg_path)
@@ -161,7 +136,7 @@ void ImGuiViewer::run()
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
     // Create window with graphics context
-    GLFWwindow* window = glfwCreateWindow(glfw_window_width_, glfw_window_height_, "Photo-SLAM", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(glfw_window_width_, glfw_window_height_, "SLAM Viewer", nullptr, nullptr);
     if (window == nullptr)
         throw std::runtime_error("[ImGuiViewer]Fails to create window!");
     glfwMakeContextCurrent(window);
@@ -243,24 +218,6 @@ void ImGuiViewer::run()
         glViewport(0, 0, display_w, display_h);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        //--------------Get pose of current tracked frame--------------
-        if (pSLAM_)
-        {
-            if (!pMapDrawer_->mbSetInitCamera)
-            {
-                Sophus::SE3f initTwc = pSlamMapDrawer_->GetCurrentCameraPose();
-                pMapDrawer_->SetInitCameraTwc(initTwc);
-                pMapDrawer_->SetCurrentCameraTwc(initTwc);
-                pMapDrawer_->mbSetInitCamera = true;
-            }
-            else
-            {
-                pMapDrawer_->SetCurrentCameraTwc(pSlamMapDrawer_->GetCurrentCameraPose());
-            }
-            pMapDrawer_->GetOpenGLCameraMatrix(true, Tcw, glmTwc, Ow);
-            if (!init_Twc_set_)
-                pMapDrawer_->GetOpenGLCameraMatrix(false, TcwInit, glmTwcInit, OwInit);
-        }
         if (tracking_vision_)
         {
             glm::vec3 cam_target = glm::vec3(Ow[3][0], Ow[3][1], Ow[3][2]);
@@ -308,82 +265,22 @@ void ImGuiViewer::run()
             cam_trans_ = cam_proj_ * cam_view_;
         }
 
-        if (pSLAM_)
-        {
-            //--------------Draw SLAM frame image--------------
-            cv::Mat SLAM_img_to_show;
-            cv::Mat SLAM_img_with_text = pSlamFrameDrawer_->DrawFrame(1.0f);
-            if (SLAM_image_viewer_scale_ != 1.0f)
-            {
-                int width = rendered_image_width_;
-                int height = static_cast<int>(SLAM_img_with_text.rows * SLAM_image_viewer_scale_);
-                cv::resize(SLAM_img_with_text, SLAM_img_with_text, cv::Size(width, height));
-                SLAM_img_to_show = cv::Mat(height, padded_sub_image_width_, CV_8UC3, cv::Vec3f(0, 0, 0));
-            }
-            else
-            {
-                SLAM_img_to_show = cv::Mat(image_height_, padded_sub_image_width_, CV_8UC3, cv::Vec3f(0, 0, 0));
-            }
-            cv::Rect SLAM_image_rect(0, 0, SLAM_img_with_text.cols, SLAM_img_with_text.rows);
-            SLAM_img_with_text.copyTo(SLAM_img_to_show(SLAM_image_rect));
-            // Upload SLAM frame
-            glBindTexture(GL_TEXTURE_2D, SLAM_img_texture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SLAM_img_to_show.cols, SLAM_img_to_show.rows,
-                        0, GL_BGR, GL_UNSIGNED_BYTE, (unsigned char*)SLAM_img_to_show.data);
-            // Create an ImGui window to show the SLAM frame
-            ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Once);
-            ImGui::SetNextWindowSize(ImVec2(rendered_image_width_ + 12, SLAM_img_to_show.rows + 40), ImGuiCond_Once);
-            {
-                ImGui::Begin("SLAM Frame");
-                ImGui::Image((void *)(intptr_t)SLAM_img_texture,
-                            ImVec2(SLAM_img_to_show.cols, SLAM_img_to_show.rows));
-                ImGui::End();
-            }
-
-            //--------------Draw current gaussian mapper frame image--------------
-            // Render gaussian mapper frame
-            cv::Mat rendered_img = pGausMapper_->renderFromPose(
-                Tcw, rendered_image_width_, rendered_image_height_, false);
-            cv::Mat rendered_img_to_show = cv::Mat(rendered_image_height_, padded_sub_image_width_, CV_32FC3, cv::Vec3f(0.0f, 0.0f, 0.0f));
-            rendered_img.copyTo(rendered_img_to_show(image_rect_sub));
-            // Upload rendered frame
-            glBindTexture(GL_TEXTURE_2D, rendered_img_texture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, rendered_img_to_show.cols, rendered_img_to_show.rows,
-                        0, GL_RGB, GL_FLOAT, (float*)rendered_img_to_show.data);
-            // Create an ImGui window to show the rendered frame
-            ImGui::SetNextWindowPos(ImVec2(0, SLAM_img_to_show.rows + 40), ImGuiCond_Once);
-            ImGui::SetNextWindowSize(ImVec2(rendered_image_width_ + 12, rendered_img_to_show.rows + 40), ImGuiCond_Once);
-            {
-                ImGui::Begin("Current Rendered Frame");
-                ImGui::Image((void *)(intptr_t)rendered_img_texture,
-                            ImVec2(rendered_img_to_show.cols, rendered_img_to_show.rows));
-                ImGui::End();
-            }
-        }
-
         //--------------Draw main window image--------------
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         // Draw main window image
         if (show_main_rendered_)
         {
             auto drawlist = ImGui::GetBackgroundDrawList();
-            if (pSLAM_ && tracking_vision_)
-            {
-                drawlist->AddImage((void *)(intptr_t)rendered_img_texture, ImVec2(0, 0),
-                                   ImVec2(glfw_window_width_, glfw_window_height_));
-            }
-            else
-            {
-                cv::Mat main_img = pGausMapper_->renderFromPose(
-                    Tcw_main_, rendered_image_width_main_, rendered_image_height_main_, true);
-                cv::Mat main_img_to_show = cv::Mat(rendered_image_height_main_, padded_main_image_width_, CV_32FC3, cv::Vec3f(0.0f, 0.0f, 0.0f));
-                main_img.copyTo(main_img_to_show(image_rect_main));
-                glBindTexture(GL_TEXTURE_2D, main_img_texture);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, main_img_to_show.cols, main_img_to_show.rows,
-                     0, GL_RGB, GL_FLOAT, (float*)main_img_to_show.data);
-                drawlist->AddImage((void *)(intptr_t)main_img_texture, ImVec2(0, 0),
-                                   ImVec2(glfw_window_width_, glfw_window_height_));
-            }
+            cv::Mat main_img = pGausMapper_->renderFromPose(
+                Tcw_main_, rendered_image_width_main_, rendered_image_height_main_, true);
+            cv::Mat main_img_to_show = cv::Mat(rendered_image_height_main_, padded_main_image_width_, CV_32FC3, cv::Vec3f(0.0f, 0.0f, 0.0f));
+            main_img.copyTo(main_img_to_show(image_rect_main));
+            glBindTexture(GL_TEXTURE_2D, main_img_texture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, main_img_to_show.cols, main_img_to_show.rows,
+                    0, GL_RGB, GL_FLOAT, (float*)main_img_to_show.data);
+            drawlist->AddImage((void *)(intptr_t)main_img_texture, ImVec2(0, 0),
+                                ImVec2(glfw_window_width_, glfw_window_height_));
+        
         }
         //--------------Get current parameters--------------
         VariableParameters params_in = pGausMapper_->getVaribleParameters();
@@ -493,15 +390,7 @@ void ImGuiViewer::run()
         glPushMatrix();
         glMultMatrixf(&cam_trans_[0][0]);
         // Draw camera, KeyFrames and MapPoints
-        if (pSLAM_ && show_keyframes_)
-        {
-            pMapDrawer_->DrawCurrentCamera(tracking_vision_ ? glmTwc : glmTwc_main_);
-            pMapDrawer_->DrawKeyFrames(true, false, true, false);
-        }
-        if (pSLAM_ && show_sparse_mappoints_)
-        {
-            pMapDrawer_->DrawMapPoints();
-        }
+
         // Clear relative viewpoint
         glPopMatrix();
 
@@ -520,10 +409,8 @@ void ImGuiViewer::run()
     glfwDestroyWindow(window);
     glfwTerminate();
 
-    if (pSLAM_ && !pSLAM_->isShutDown())
-        pSLAM_->Shutdown();
-    else
-        pGausMapper_->signalStop();
+
+    pGausMapper_->signalStop();
 
     if (pGausMapper_->isKeepingTraining())
         pGausMapper_->setKeepTraining(false);

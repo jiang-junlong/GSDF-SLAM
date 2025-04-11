@@ -31,6 +31,7 @@
 #include "tensor_utils.h"
 #include "third_party/Sophus/sophus/se3.hpp"
 
+// 关键帧
 class GaussianKeyframe
 {
 public:
@@ -108,12 +109,12 @@ public:
     bool set_pose_ = false;
     bool set_projection_matrix_ = false;
 
-    Eigen::Quaterniond R_quaternion_;  ///< extrinsics
-    Eigen::Vector3d t_;                ///< extrinsics
-    Sophus::SE3d Tcw_;                 ///< extrinsics
+    Eigen::Quaterniond R_quaternion_;  ///< 外参
+    Eigen::Vector3d t_;                ///< 外参
+    Sophus::SE3d Tcw_;                 ///< 外参
 
-    torch::Tensor R_tensor_; ///< extrinsics
-    torch::Tensor t_tensor_; ///< extrinsics
+    torch::Tensor R_tensor_; ///< 外参
+    torch::Tensor t_tensor_; ///< 外参
 
     float zfar_ = 100.0f;
     float znear_ = 0.01f;

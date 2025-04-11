@@ -20,17 +20,12 @@
 
 #include <torch/torch.h>
 
-#include "map_drawer.h"
+#include "drawer_utils.h"
 
 #include "include/graphics_utils.h"
 #include "include/gaussian_mapper.h"
 
-#include "ORB-SLAM3/include/FrameDrawer.h"
-#include "ORB-SLAM3/include/MapDrawer.h"
-#include "ORB-SLAM3/include/Tracking.h"
-#include "ORB-SLAM3/include/System.h"
-#include "ORB-SLAM3/include/Settings.h"
-#include "ORB-SLAM3/Thirdparty/Sophus/sophus/se3.hpp"
+#include "third_party/Sophus/sophus/se3.hpp"
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
@@ -43,25 +38,11 @@
 
 #include <mutex>
 
-namespace ORB_SLAM3
-{
-
-class Tracking;
-class FrameDrawer;
-class MapDrawer;
-class System;
-class Settings;
-
-} // namespace ORB_SLAM3
-
 class ImGuiViewer
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    ImGuiViewer(
-        std::shared_ptr<ORB_SLAM3::System> pSLAM,
-        std::shared_ptr<GaussianMapper> pGausMapper,
-        bool training = true);
+    ImGuiViewer(std::shared_ptr<GaussianMapper> pGausMapper, bool training = true);
     void readConfigFromFile(std::filesystem::path cfg_path);
 
     void run();
@@ -76,12 +57,7 @@ protected:
     void keyboardEvent();
 
 protected:
-    std::shared_ptr<ORB_SLAM3::System> pSLAM_;
     std::shared_ptr<GaussianMapper> pGausMapper_;
-
-    ORB_SLAM3::FrameDrawer* pSlamFrameDrawer_;
-    ORB_SLAM3::MapDrawer* pSlamMapDrawer_;
-    std::shared_ptr<ORB_SLAM3::ImGuiMapDrawer> pMapDrawer_;
 
     // Status
     bool free_view_enabled_ = true;

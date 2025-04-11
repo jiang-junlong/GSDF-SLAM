@@ -51,6 +51,12 @@
         "stdexcept": "cpp",
         "streambuf": "cpp",
         "cinttypes": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "*.ipp": "cpp",
+        "regex": "cpp",
+        "valarray": "cpp",
+        "deque": "cpp",
+        "forward_list": "cpp",
+        "fstream": "cpp"
     }
 }

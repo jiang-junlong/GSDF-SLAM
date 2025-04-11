@@ -38,6 +38,7 @@ void readColmapCamerasBinary(
         throw std::runtime_error("Invalid file path!");
 
     const std::size_t num_cameras = colmap::ReadBinaryLittleEndian<std::uint64_t>(&file);
+    std::cout << "Loading " << num_cameras << " cameras..." << std::endl;
     for (std::size_t i = 0; i < num_cameras; ++i) {
         class Camera camera;
         camera.camera_id_ = colmap::ReadBinaryLittleEndian<camera_id_t>(&file);
@@ -232,8 +233,8 @@ void readColmapScene(std::shared_ptr<GaussianMapper> pMapper)
     std::filesystem::path images_dir             = model_params.source_path_ / "images";
 
     readColmapCamerasBinary(pMapper, cameras_intrinsic_file);
-    readColmapImagesBinary(pMapper, cameras_extrinsic_file, images_dir);
-    readColmapPoints3DBinary(scene, points3D_bin_file);
+    readColmapImagesBinary(pMapper, cameras_extrinsic_file, images_dir);    // 读取图片
+    readColmapPoints3DBinary(scene, points3D_bin_file);                     // 读取恢复的点云
 }
 
 int main(int argc, char** argv)
@@ -274,8 +275,7 @@ int main(int argc, char** argv)
     // Create GaussianMapper
     std::filesystem::path gaussian_cfg_path(argv[1]);
     std::shared_ptr<GaussianMapper> pGausMapper =
-        std::make_shared<GaussianMapper>(
-            nullptr, gaussian_cfg_path, output_dir, 0, device_type);
+        std::make_shared<GaussianMapper>(gaussian_cfg_path, output_dir, 0, device_type);
 
     // Read the colmap scene
     pGausMapper->setSensorType(MONOCULAR);
@@ -287,7 +287,7 @@ int main(int argc, char** argv)
     std::shared_ptr<ImGuiViewer> pViewer;
     if (use_viewer)
     {
-        pViewer = std::make_shared<ImGuiViewer>(nullptr, pGausMapper);
+        pViewer = std::make_shared<ImGuiViewer>(pGausMapper);
         viewer_thd = std::thread(&ImGuiViewer::run, pViewer.get());
     }
 
