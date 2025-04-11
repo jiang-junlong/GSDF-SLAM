@@ -113,20 +113,21 @@ void GaussianModel::setShDegree(const int sh)
 
 // 从稀疏点云中初始化高斯基元
 void GaussianModel::createFromPcd(
-    std::map<point3D_id_t, Point3D> pcd, 
+    std::map<point3D_id_t, Point3D> pcd,
     const float spatial_lr_scale)
 {
     this->spatial_lr_scale_ = spatial_lr_scale;
-    int num_points = static_cast<int>(pcd.size()); // 点云的数量
+    int num_points = static_cast<int>(pcd.size());   // 需要初始化的高斯数量
     torch::Tensor fused_point_cloud = torch::zeros(
         {num_points, 3},
-        torch::TensorOptions().dtype(torch::kFloat).device(device_type_));
+        torch::TensorOptions().dtype(torch::kFloat).device(device_type_)); // 按照大小初始化全零张量，表示高斯基元的坐标
     torch::Tensor color = torch::zeros(
         {num_points, 3},
-        torch::TensorOptions().dtype(torch::kFloat).device(device_type_));
+        torch::TensorOptions().dtype(torch::kFloat).device(device_type_)); // 按照大小初始化全零张量，表示高斯基元的颜色
     auto pcd_it = pcd.begin();
+    
     for (int point_idx = 0; point_idx < num_points; ++point_idx) {
-        auto& point = (*pcd_it).second;  // 三维点坐标
+        auto& point = (*pcd_it).second;                            // 三维点坐标
         fused_point_cloud.index({point_idx, 0}) = point.xyz_(0);
         fused_point_cloud.index({point_idx, 1}) = point.xyz_(1);
         fused_point_cloud.index({point_idx, 2}) = point.xyz_(2);
@@ -136,7 +137,8 @@ void GaussianModel::createFromPcd(
         ++pcd_it;
     }
 
-    torch::Tensor fused_color = sh_utils::RGB2SH(color);  // 将颜色张量转换为球谐系数
+    // 将颜色张量转换为球谐系数张量feature
+    torch::Tensor fused_color = sh_utils::RGB2SH(color);  
     auto temp = this->max_sh_degree_ + 1;
     torch::Tensor features = torch::zeros(
         {fused_color.size(0), 3, temp * temp},
@@ -161,9 +163,7 @@ void GaussianModel::createFromPcd(
     rots.index({torch::indexing::Slice(), 0}) = 1;
 
     torch::Tensor opacities = general_utils::inverse_sigmoid(
-        0.1f * torch::ones(
-                   {fused_point_cloud.size(0), 1},
-                   torch::TensorOptions().dtype(torch::kFloat).device(device_type_)));
+        0.1f * torch::ones({fused_point_cloud.size(0), 1}, torch::TensorOptions().dtype(torch::kFloat).device(device_type_)));
 
     this->exist_since_iter_ = torch::zeros(
         {fused_point_cloud.size(0)},
@@ -188,7 +188,7 @@ void GaussianModel::createFromPcd(
     
     GAUSSIAN_MODEL_TENSORS_TO_VEC
 
-    this->max_radii2D_ = torch::zeros({this->getXYZ().size(0)}, torch::TensorOptions().device(device_type_));
+    this->max_radii2D_ = torch::zeros({this->getXYZ().size(0)}, torch::TensorOptions().device(device_type_));  // 初始化高斯半径
 }
 
 void GaussianModel::increasePcd(std::vector<float> points, std::vector<float> colors, const int iteration)

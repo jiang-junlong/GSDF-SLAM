@@ -32,6 +32,5 @@ public:
 
 public:
     Eigen::Vector2d xy_;       // 2D点坐标
-
     std::uint64_t point3D_id_; // 对应3D点ID
 };

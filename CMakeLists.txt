@@ -35,6 +35,8 @@ find_package(glm REQUIRED)
 find_package(glfw3 REQUIRED)
 
 find_package(realsense2)
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE INTERNAL "No dev warnings") # 关闭pcl烦人的警告
+find_package(PCL REQUIRED)
 
 set(ORB_SLAM3_SOURCE_DIR "${PROJECT_SOURCE_DIR}/ORB-SLAM3")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
@@ -42,13 +44,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
 include_directories(
     ${PROJECT_SOURCE_DIR}
-    # ${ORB_SLAM3_SOURCE_DIR}
-    # ${ORB_SLAM3_SOURCE_DIR}/include
-    # ${ORB_SLAM3_SOURCE_DIR}/include/CameraModels
     ${PROJECT_SOURCE_DIR}/third_party/Sophus
     ${EIGEN3_INCLUDE_DIR}
-    ${OPENGL_INCLUDE_DIR})
-
+    ${OPENGL_INCLUDE_DIR}
+    ${PCL_INCLUDE_DIRS}
+    )
 
 ##################################################################################
 ##  Build the gaussian splatting component libraries to ${PROJECT_SOURCE_DIR}/lib
@@ -146,7 +146,7 @@ add_library(gaussian_mapper SHARED
     src/gaussian_trainer.cpp
     src/gaussian_mapper.cpp)
 target_link_libraries(gaussian_mapper
-    ${ORB_SLAM3_SOURCE_DIR}/lib/libORB_SLAM3.so
+    # ${ORB_SLAM3_SOURCE_DIR}/lib/libORB_SLAM3.so
     ${OpenCV_LIBRARIES}
     jsoncpp_lib
     "${TORCH_LIBRARIES}"
@@ -162,10 +162,8 @@ add_library(gaussian_viewer SHARED
     viewer/drawer_utils.h
     viewer/imgui_viewer.cpp
     viewer/imgui_viewer.h
-    viewer/map_drawer.cpp
-    viewer/map_drawer.h)
+    )
 target_link_libraries(gaussian_viewer
-    ${ORB_SLAM3_SOURCE_DIR}/lib/libORB_SLAM3.so
     gaussian_mapper
     imgui
     ${OpenCV_LIBRARIES}
@@ -189,3 +187,20 @@ add_executable(view_result examples/view_result.cpp)
 target_link_libraries(view_result
     gaussian_viewer
     gaussian_mapper)
+
+
+
+##################################################################################
+# Add the new executable for color_point_cloud.cpp (your test code)
+add_executable(color_point_cloud color_point_cloud.cpp)
+
+# Link the necessary libraries to the executable
+target_link_libraries(color_point_cloud
+    ${OpenCV_LIBRARIES}
+    ${PCL_LIBRARIES}
+    "${TORCH_LIBRARIES}"
+    Eigen3::Eigen
+    glm::glm
+    glfw
+    OpenGL::GL
+)

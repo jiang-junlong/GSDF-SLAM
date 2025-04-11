@@ -24,17 +24,15 @@ class Point3D
 {
 public:
     Point3D()
-        : xyz_(0.0, 0.0, 0.0),
-          color_(0.0f, 0.0f, 0.0f),
-          color256_(0, 0, 0),
+        : xyz_(0.0, 0.0, 0.0),       
+          color_(0.0f, 0.0f, 0.0f),  
+          color256_(0, 0, 0),    
           error_(-1.0)
     {}
 
 public:
-    Eigen::Vector3d xyz_; // 3D点坐标 
-
-    Eigen::Matrix<uint8_t, 3, 1> color256_; // not needed if we get color_ directly
-    Eigen::Matrix<float, 3, 1> color_; // 对应的颜色
-
+    Eigen::Vector3d xyz_;                       // 3D点坐标 
+    Eigen::Matrix<uint8_t, 3, 1> color256_;     // 颜色(像素值) not needed if we get color_ directly
+    Eigen::Matrix<float, 3, 1> color_;          // 归一化颜色
     double error_;
 };
