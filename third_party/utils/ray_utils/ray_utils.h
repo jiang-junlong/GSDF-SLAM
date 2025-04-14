@@ -6,6 +6,7 @@
 
 typedef pcl::PointXYZ PointT;
 typedef pcl::PointCloud<PointT> PointCloudT;
+typedef pcl::PointCloud<PointT>::Ptr PointCloudPtr;
 
 struct RaySamples {
   torch::Tensor origin;    // [N, 3]
