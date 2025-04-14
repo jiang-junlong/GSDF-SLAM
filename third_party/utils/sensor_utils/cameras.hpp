@@ -40,6 +40,7 @@ get_image_coords_ndir(const int &height, const int &width, const float &fx,
   return {ndir, zdir_norm};
 }
 
+// 相机传感器模型：相机参数和一些相关函数
 struct Cameras {
   float fx;
   float fy;

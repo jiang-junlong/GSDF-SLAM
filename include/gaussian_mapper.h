@@ -45,6 +45,7 @@
 #include "gaussian_keyframe.h"
 #include "gaussian_scene.h"
 #include "gaussian_trainer.h"
+#include "third_party/data_loader/data_loader.h"
 
 #define CHECK_DIRECTORY_AND_CREATE_IF_NOT_EXISTS(dir)                                       \
     if (!dir.empty() && !std::filesystem::exists(dir))                                      \
@@ -97,6 +98,7 @@ class GaussianMapper
 {
 public:
     GaussianMapper(
+        std::filesystem::path dataset_path,
         std::filesystem::path gaussian_config_file_path,
         std::filesystem::path result_dir = "",
         int seed = 0,
@@ -232,6 +234,7 @@ public:
     std::map<camera_id_t, torch::Tensor> undistort_mask_;
     std::map<camera_id_t, torch::Tensor> viewer_main_undistort_mask_;
     std::map<camera_id_t, torch::Tensor> viewer_sub_undistort_mask_;
+    dataloader::DataLoader::Ptr dataloader_ptr_;  // 数据加载器
 
 protected:
     // Parameters

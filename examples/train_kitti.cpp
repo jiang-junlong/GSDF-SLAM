@@ -63,56 +63,10 @@ int main(int argc, char** argv)
     {
         std::cout << "Training on CPU." << std::endl;
         device_type = torch::kCPU;
-    }
-
-    // 读取配置文件
-    cv::FileStorage fsSettings(_config_path, cv::FileStorage::READ);                
-    if (!fsSettings.isOpened()) {
-        std::cerr << "ERROR: Wrong path to settings: " << _config_path << "\n";
-        exit(-1);
-    }
-    std::filesystem::path dataset_path = fsSettings["data_path"];  // 数据集路径
-    int dataset_type = fsSettings["dataset_type"];
-    float res_scale = 1.0f;
-    sensor::Sensors sensor;
-    if (!fsSettings["camera"].isNone()) {
-        sensor.camera.model = fsSettings["camera"]["model"];
-        sensor.camera.width = fsSettings["camera"]["width"];
-        sensor.camera.height = fsSettings["camera"]["height"];
-        sensor.camera.fx = fsSettings["camera"]["fx"];
-        sensor.camera.fy = fsSettings["camera"]["fy"];
-        sensor.camera.cx = fsSettings["camera"]["cx"];
-        sensor.camera.cy = fsSettings["camera"]["cy"];
-    
-        sensor.camera.set_distortion(
-            fsSettings["camera"]["d0"], fsSettings["camera"]["d1"],
-            fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
-            fsSettings["camera"]["d4"]);
-      }
-      if (!fsSettings["extrinsic"].isNone()) {
-        cv::Mat cv_T_C_L;
-        fsSettings["extrinsic"]["T_C_L"] >> cv_T_C_L;
-        cv_T_C_L.convertTo(cv_T_C_L, CV_32FC1);
-        sensor.T_C_L =
-            torch::from_blob(cv_T_C_L.data, {4, 4}, torch::kFloat32).clone();
-    
-        cv::Mat cv_T_B_L;
-        fsSettings["extrinsic"]["T_B_L"] >> cv_T_B_L;
-        cv_T_B_L.convertTo(cv_T_B_L, CV_32FC1);
-        sensor.T_B_L =
-            torch::from_blob(cv_T_B_L.data, {4, 4}, torch::kFloat32).clone();
-    
-        sensor.T_B_C = sensor.T_B_L.matmul(sensor.T_C_L.inverse());
-      }
-
-    // 创建数据加载器
-    data_loader_ptr = std::make_unique<dataloader::DataLoader>(
-        dataset_path, dataset_type, device_type, false, res_scale, sensor);
-
+    }        
     // Create GaussianMapper
     std::filesystem::path gaussian_cfg_path(argv[1]);
-    std::shared_ptr<GaussianMapper> pGausMapper =
-        std::make_shared<GaussianMapper>(gaussian_cfg_path, output_dir, 0, device_type);
+    std::shared_ptr<GaussianMapper> pGausMapper = std::make_shared<GaussianMapper>(dataset_path, gaussian_cfg_path, output_dir, 0, device_type);
 
     // Read the colmap scene
     pGausMapper->setSensorType(MONOCULAR);
