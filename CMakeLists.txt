@@ -191,10 +191,11 @@ target_link_libraries(view_result
 
 
 ##################################################################################
-# Add the new executable for color_point_cloud.cpp (your test code)
+##  toolbox
+##################################################################################
+
 add_executable(color_point_cloud color_point_cloud.cpp)
 
-# Link the necessary libraries to the executable
 target_link_libraries(color_point_cloud
     ${OpenCV_LIBRARIES}
     ${PCL_LIBRARIES}
