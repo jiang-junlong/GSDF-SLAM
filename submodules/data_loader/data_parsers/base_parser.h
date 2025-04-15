@@ -1,8 +1,8 @@
 #pragma once
 
-#include "third_party/utils/sensor_utils/cameras.hpp"
-#include "third_party/utils/sensor_utils/sensors.hpp"
-#include "third_party/utils/utils.h"
+#include "submodules/utils/sensor_utils/cameras.hpp"
+#include "submodules/utils/sensor_utils/sensors.hpp"
+#include "submodules/utils/utils.h"
 #include <dirent.h>
 #include <filesystem>
 #include <Eigen/Dense>

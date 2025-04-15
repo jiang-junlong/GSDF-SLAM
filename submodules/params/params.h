@@ -1,6 +1,6 @@
 #pragma once
 
-#include "third_party/utils/sensor_utils/sensors.hpp"
+#include "submodules/utils/sensor_utils/sensors.hpp"
 #include <filesystem>
 #include <fstream>
 #include <torch/torch.h>

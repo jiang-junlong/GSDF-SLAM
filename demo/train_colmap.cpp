@@ -25,7 +25,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/types_c.h>
 
-#include "third_party/colmap/utils/endian.h"
+#include "submodules/colmap/utils/endian.h"
 #include "include/gaussian_mapper.h"
 #include "viewer/imgui_viewer.h"
 

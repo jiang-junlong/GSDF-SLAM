@@ -24,9 +24,9 @@
 #include <torch/torch.h>
 #include <c10/cuda/CUDACachingAllocator.h>
 
-#include "third_party/Sophus/sophus/se3.hpp"
-#include "third_party/simple-knn/spatial.h"
-#include "third_party/tinyply/tinyply.h"
+#include "submodules/Sophus/sophus/se3.hpp"
+#include "submodules/simple-knn/spatial.h"
+#include "submodules/tinyply/tinyply.h"
 #include "types.h"
 #include "point3d.h"
 #include "operate_points.h"

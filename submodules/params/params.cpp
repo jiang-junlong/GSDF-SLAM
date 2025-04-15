@@ -1,4 +1,4 @@
-#include "third_party/params/params.h"
+#include "submodules/params/params.h"
 #include <opencv2/opencv.hpp>
 
 #ifdef ENABLE_ROS

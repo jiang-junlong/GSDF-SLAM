@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "third_party/Sophus/sophus/se3.hpp"
+#include "submodules/Sophus/sophus/se3.hpp"
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"

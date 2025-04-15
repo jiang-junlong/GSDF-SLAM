@@ -39,13 +39,17 @@ ImGuiViewer::ImGuiViewer(
 
     cv::Size im_size;
  
-    image_height_ = pGausMapper->scene_->cameras_.begin()->second.height_;
-    image_width_ = pGausMapper->scene_->cameras_.begin()->second.width_;
-    viewpointF_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
+    image_height_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.height;
+    image_width_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.width;
+    viewpointF_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fy;
+    main_fx_= pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fx;
+    main_fy_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fy;
 
-
-    main_fx_ = pGausMapper->scene_->cameras_.begin()->second.params_[0];
-    main_fy_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
+    // image_height_ = pGausMapper->scene_->cameras_.begin()->second.height_;
+    // image_width_ = pGausMapper->scene_->cameras_.begin()->second.width_;
+    // viewpointF_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
+    // main_fx_ = pGausMapper->scene_->cameras_.begin()->second.params_[0];
+    // main_fy_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
 
     // Gaussian Mapper settings
     std::filesystem::path cfg_file_path = pGausMapper->config_file_path_;
@@ -273,6 +277,7 @@ void ImGuiViewer::run()
             auto drawlist = ImGui::GetBackgroundDrawList();
             cv::Mat main_img = pGausMapper_->renderFromPose(
                 Tcw_main_, rendered_image_width_main_, rendered_image_height_main_, true);
+            
             cv::Mat main_img_to_show = cv::Mat(rendered_image_height_main_, padded_main_image_width_, CV_32FC3, cv::Vec3f(0.0f, 0.0f, 0.0f));
             main_img.copyTo(main_img_to_show(image_rect_main));
             glBindTexture(GL_TEXTURE_2D, main_img_texture);
