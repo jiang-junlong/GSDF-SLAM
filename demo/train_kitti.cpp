@@ -29,25 +29,25 @@
 
 int main(int argc, char** argv)
 {
-    // if (argc != 4 && argc != 5)
-    // {
-    //     std::cerr << std::endl
-    //               << "Usage: " << argv[0]
-    //               << " path_to_gaussian_mapping_settings"    /*1*/
-    //               << " path_to_colmap_data_directory/"       /*2*/
-    //               << " path_to_output_directory/"            /*3*/
-    //               << " (optional)no_viewer"                  /*4*/
-    //               << std::endl;
-    //     return 1;
-    // }
-    // bool use_viewer = true;
-    // if (argc == 5)
-    //     use_viewer = (std::string(argv[4]) == "no_viewer" ? false : true);
+    if (argc != 4 && argc != 5)
+    {
+        std::cerr << std::endl
+                  << "Usage: " << argv[0]
+                  << " path_to_gaussian_mapping_settings"    /*1*/
+                  << " path_to_colmap_data_directory/"       /*2*/
+                  << " path_to_output_directory/"            /*3*/
+                  << " (optional)no_viewer"                  /*4*/
+                  << std::endl;
+        return 1;
+    }
+    bool use_viewer = true;
+    if (argc == 5)
+        use_viewer = (std::string(argv[4]) == "no_viewer" ? false : true);
 
-    // std::string output_directory = std::string(argv[3]);
-    // if (output_directory.back() != '/')
-    //     output_directory += "/";
-    // std::filesystem::path output_dir(output_directory);
+    std::string output_directory = std::string(argv[3]);
+    if (output_directory.back() != '/')
+        output_directory += "/";
+    std::filesystem::path output_dir(output_directory);
 
     // Device
     torch::DeviceType device_type;
@@ -67,7 +67,7 @@ int main(int argc, char** argv)
     pcl::visualization::PCLVisualizer viewer("Viewer");
     viewer.setBackgroundColor(0, 0, 0);
     viewer.initCameraParameters();
-    viewer.addCoordinateSystem(1.0); // 
+    viewer.addCoordinateSystem(1.0);
     
     for (int i = 0; i < test.dataparser_ptr_->raw_depth_filelists_.size(); ++i) {
         pcl::PointCloud<pcl::PointXYZRGB> colored_points;
