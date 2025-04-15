@@ -1,11 +1,11 @@
 #pragma once
 
-#include "utils/sensor_utils/cameras.hpp"
-#include "utils/sensor_utils/sensors.hpp"
-#include "utils/utils.h"
+#include "third_party/utils/sensor_utils/cameras.hpp"
+#include "third_party/utils/sensor_utils/sensors.hpp"
+#include "third_party/utils/utils.h"
 #include <dirent.h>
 #include <filesystem>
-
+#include <Eigen/Dense>
 #include <opencv2/opencv.hpp>
 #include <torch/torch.h>
 
@@ -54,7 +54,8 @@ struct DataParser {
   std::filesystem::path pose_path_, calib_path_, color_path_, depth_path_;
 
   std::filesystem::path eval_pose_path_, eval_color_path_, eval_depth_path_;
-
+  Eigen::Matrix<double, 3, 4> P;
+  Eigen::Matrix<double, 4, 4> Tr;
   torch::Device device_ = torch::kCPU;
   torch::Tensor train_color_;     // [N, H, W, 3]
   DepthSamples train_depth_pack_; // [N]
@@ -130,7 +131,7 @@ struct DataParser {
 
   virtual void load_eval_data() { throw std::runtime_error("Not implemented"); }
 
-  virtual bool load_calib() {
+  virtual void load_calib() {
     throw std::runtime_error("Not implemented");
 
     if (!std::filesystem::exists(calib_path_)) {
@@ -169,8 +170,6 @@ struct DataParser {
     } */
     std::cout << "T_B_S:" << "\n" << T_B_S_ << "\n";
     T_S_B_ = T_B_S_.inverse();
-
-    return true;
   }
 
   virtual std::vector<torch::Tensor> load_poses(const std::string &pose_path,

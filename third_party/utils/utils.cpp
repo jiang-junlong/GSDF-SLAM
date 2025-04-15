@@ -1,5 +1,5 @@
 #include "utils.h"
-#include "kaolin_wisp_cpp/spc_ops/spc_ops.h"
+// #include "kaolin_wisp_cpp/spc_ops/spc_ops.h"
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -720,46 +720,46 @@ sensor_msgs::Image tensor_to_img_msg(const torch::Tensor &_image) {
   return img_msg;
 }
 
-visualization_msgs::Marker get_vix_voxel_map(const torch::Tensor &_xyz,
-                                             float voxel_size, float r, float g,
-                                             float b) {
-  auto xyz_idx_uniq = (_xyz.squeeze() / voxel_size).floor().to(torch::kLong);
-  xyz_idx_uniq = std::get<0>(torch::unique_dim(xyz_idx_uniq, 0));
-  /// [n, 8, 3]
-  xyz_idx_uniq = spc_ops::points_to_corners(xyz_idx_uniq);
-  auto voxel_vertex_xyz = xyz_idx_uniq * voxel_size;
-  /// [n, 24, 3]
-  voxel_vertex_xyz =
-      torch::stack(
-          {voxel_vertex_xyz.select(1, 0), voxel_vertex_xyz.select(1, 1),
-           voxel_vertex_xyz.select(1, 1), voxel_vertex_xyz.select(1, 3),
-           voxel_vertex_xyz.select(1, 3), voxel_vertex_xyz.select(1, 2),
-           voxel_vertex_xyz.select(1, 2), voxel_vertex_xyz.select(1, 0),
-           voxel_vertex_xyz.select(1, 4), voxel_vertex_xyz.select(1, 5),
-           voxel_vertex_xyz.select(1, 5), voxel_vertex_xyz.select(1, 7),
-           voxel_vertex_xyz.select(1, 7), voxel_vertex_xyz.select(1, 6),
-           voxel_vertex_xyz.select(1, 6), voxel_vertex_xyz.select(1, 4),
-           voxel_vertex_xyz.select(1, 0), voxel_vertex_xyz.select(1, 4),
-           voxel_vertex_xyz.select(1, 1), voxel_vertex_xyz.select(1, 5),
-           voxel_vertex_xyz.select(1, 2), voxel_vertex_xyz.select(1, 6),
-           voxel_vertex_xyz.select(1, 3), voxel_vertex_xyz.select(1, 7)},
-          1)
-          .to(torch::kDouble)
-          .cpu();
+// visualization_msgs::Marker get_vix_voxel_map(const torch::Tensor &_xyz,
+//                                              float voxel_size, float r, float g,
+//                                              float b) {
+//   auto xyz_idx_uniq = (_xyz.squeeze() / voxel_size).floor().to(torch::kLong);
+//   xyz_idx_uniq = std::get<0>(torch::unique_dim(xyz_idx_uniq, 0));
+//   /// [n, 8, 3]
+//   xyz_idx_uniq = spc_ops::points_to_corners(xyz_idx_uniq);
+//   auto voxel_vertex_xyz = xyz_idx_uniq * voxel_size;
+//   /// [n, 24, 3]
+//   voxel_vertex_xyz =
+//       torch::stack(
+//           {voxel_vertex_xyz.select(1, 0), voxel_vertex_xyz.select(1, 1),
+//            voxel_vertex_xyz.select(1, 1), voxel_vertex_xyz.select(1, 3),
+//            voxel_vertex_xyz.select(1, 3), voxel_vertex_xyz.select(1, 2),
+//            voxel_vertex_xyz.select(1, 2), voxel_vertex_xyz.select(1, 0),
+//            voxel_vertex_xyz.select(1, 4), voxel_vertex_xyz.select(1, 5),
+//            voxel_vertex_xyz.select(1, 5), voxel_vertex_xyz.select(1, 7),
+//            voxel_vertex_xyz.select(1, 7), voxel_vertex_xyz.select(1, 6),
+//            voxel_vertex_xyz.select(1, 6), voxel_vertex_xyz.select(1, 4),
+//            voxel_vertex_xyz.select(1, 0), voxel_vertex_xyz.select(1, 4),
+//            voxel_vertex_xyz.select(1, 1), voxel_vertex_xyz.select(1, 5),
+//            voxel_vertex_xyz.select(1, 2), voxel_vertex_xyz.select(1, 6),
+//            voxel_vertex_xyz.select(1, 3), voxel_vertex_xyz.select(1, 7)},
+//           1)
+//           .to(torch::kDouble)
+//           .cpu();
 
-  visualization_msgs::Marker marker;
-  marker.type = visualization_msgs::Marker::LINE_LIST;
-  marker.action = visualization_msgs::Marker::ADD;
-  marker.color.a = 1.0;
-  marker.color.r = r;
-  marker.color.g = g;
-  marker.color.b = b;
-  marker.scale.x = 0.1 * voxel_size;
-  marker.points.resize(voxel_vertex_xyz.size(0) * 24);
-  memcpy(marker.points.data(), voxel_vertex_xyz.data_ptr<double>(),
-         voxel_vertex_xyz.numel() * sizeof(double));
-  return marker;
-}
+//   visualization_msgs::Marker marker;
+//   marker.type = visualization_msgs::Marker::LINE_LIST;
+//   marker.action = visualization_msgs::Marker::ADD;
+//   marker.color.a = 1.0;
+//   marker.color.r = r;
+//   marker.color.g = g;
+//   marker.color.b = b;
+//   marker.scale.x = 0.1 * voxel_size;
+//   marker.points.resize(voxel_vertex_xyz.size(0) * 24);
+//   memcpy(marker.points.data(), voxel_vertex_xyz.data_ptr<double>(),
+//          voxel_vertex_xyz.numel() * sizeof(double));
+//   return marker;
+// }
 
 visualization_msgs::Marker get_vis_shift_map(torch::Tensor _pos_W_M,
                                              float _x_min, float _x_max,

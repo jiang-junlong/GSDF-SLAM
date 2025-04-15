@@ -3,8 +3,8 @@
 #include <dirent.h>
 #include <filesystem>
 
-#include "params/params.h"
-#include "utils/ply_utils/ply_utils_torch.h"
+#include "third_party/params/params.h"
+#include "third_party/utils/ply_utils/ply_utils_torch.h"
 #include <opencv2/opencv.hpp>
 #include <pcl/io/pcd_io.h>
 
