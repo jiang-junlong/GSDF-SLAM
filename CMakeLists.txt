@@ -3,8 +3,8 @@ project(photo-slam LANGUAGES CXX CUDA)
 
 option(ENABLE_ROS "Enable ROS support" OFF)
 if(NOT CMAKE_BUILD_TYPE)
-    # set(CMAKE_BUILD_TYPE Debug)
-    set(CMAKE_BUILD_TYPE Release)
+    set(CMAKE_BUILD_TYPE Debug)
+    # set(CMAKE_BUILD_TYPE Release)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
@@ -47,7 +47,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
 include_directories(
     ${PROJECT_SOURCE_DIR}
-    ${PROJECT_SOURCE_DIR}/third_party/Sophus
+    ${PROJECT_SOURCE_DIR}/submodules/Sophus
     ${EIGEN3_INCLUDE_DIR}
     ${OPENGL_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
@@ -58,10 +58,10 @@ include_directories(
 ##################################################################################
 
 add_library(simple_knn SHARED
-    third_party/simple-knn/simple_knn.cu
-    third_party/simple-knn/simple_knn.h
-    third_party/simple-knn/spatial.cu
-    third_party/simple-knn/spatial.h)
+    submodules/simple-knn/simple_knn.cu
+    submodules/simple-knn/simple_knn.h
+    submodules/simple-knn/spatial.cu
+    submodules/simple-knn/spatial.h)
 # target_compile_features(simple_knn PUBLIC cxx_std_17)
 target_link_libraries(simple_knn "${TORCH_LIBRARIES}")
 
@@ -120,8 +120,8 @@ target_link_libraries(imgui glfw OpenGL::GL)
 ##################################################################################
 
 add_library(gaussian_mapper SHARED
-    third_party/tinyply/tinyply.h
-    third_party/tinyply/tinyply.cpp
+    submodules/tinyply/tinyply.h
+    submodules/tinyply/tinyply.cpp
     include/gaussian_keyframe.h
     include/gaussian_model.h
     include/gaussian_parameters.h
@@ -182,22 +182,22 @@ target_link_libraries(gaussian_viewer
 ##################################################################################
 find_package(catkin REQUIRED)
 
-add_library(ply_utils third_party/utils/ply_utils/ply_utils_pcl.cpp
-                      third_party/utils/ply_utils/ply_utils_torch.cpp)
+add_library(ply_utils submodules/utils/ply_utils/ply_utils_pcl.cpp
+                      submodules/utils/ply_utils/ply_utils_torch.cpp)
 target_link_libraries(ply_utils  
                       ${PCL_LIBRARIES}
                       ${TORCH_LIBRARIES}
                       ${catkin_LIBRARIES})
-add_library(data_parser third_party/data_loader/data_parsers/base_parser.cpp
-                        third_party/params/params.cpp
-                        third_party/utils/utils.cpp)
+add_library(data_parser submodules/data_loader/data_parsers/base_parser.cpp
+                        submodules/params/params.cpp
+                        submodules/utils/utils.cpp)
 target_link_libraries(data_parser ${TORCH_LIBRARIES} ply_utils ${OpenCV_LIBS} ${catkin_LIBRARIES})
 
-add_library(ray_utils third_party/utils/ray_utils/ray_utils.cpp)
+add_library(ray_utils submodules/utils/ray_utils/ray_utils.cpp)
 target_link_libraries(ray_utils ${TORCH_LIBRARIES})
 
-add_library(data_loader third_party/data_loader/data_loader.cpp
-                        third_party/utils/coordinates.cpp
+add_library(data_loader submodules/data_loader/data_loader.cpp
+                        submodules/utils/coordinates.cpp
                         )
 target_link_libraries(data_loader data_parser ray_utils)
 
@@ -207,10 +207,12 @@ target_link_libraries(data_loader data_parser ray_utils)
 ##################################################################################
 
 # This is a C++ libtorch implementation of gaussian-splatting (https://github.com/graphdeco-inria/gaussian-splatting)
-# add_executable(train_colmap examples/train_colmap.cpp)
-# target_link_libraries(train_colmap
-#     gaussian_viewer
-#     gaussian_mapper)
+add_executable(train_colmap demo/train_colmap.cpp)
+target_link_libraries(train_colmap
+    gaussian_viewer
+    gaussian_mapper
+    data_loader
+    )
 
 # add_executable(view_result examples/view_result.cpp)
 # target_link_libraries(view_result

@@ -22,32 +22,32 @@
 
 #include <torch/torch.h>
 #include <Eigen/Geometry>
-#include "third_party/colmap/utils/endian.h"
+#include "submodules/colmap/utils/endian.h"
 #include "include/gaussian_mapper.h"
 #include "viewer/imgui_viewer.h"
 #include <pcl/visualization/pcl_visualizer.h>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
-    if (argc != 4 && argc != 5)
-    {
-        std::cerr << std::endl
-                  << "Usage: " << argv[0]
-                  << " path_to_gaussian_mapping_settings"    /*1*/
-                  << " path_to_colmap_data_directory/"       /*2*/
-                  << " path_to_output_directory/"            /*3*/
-                  << " (optional)no_viewer"                  /*4*/
-                  << std::endl;
-        return 1;
-    }
+    // if (argc != 4 && argc != 5)
+    // {
+    //     std::cerr << std::endl
+    //               << "Usage: " << argv[0]
+    //               << " path_to_gaussian_mapping_settings"    /*1*/
+    //               << " path_to_colmap_data_directory/"       /*2*/
+    //               << " path_to_output_directory/"            /*3*/
+    //               << " (optional)no_viewer"                  /*4*/
+    //               << std::endl;
+    //     return 1;
+    // }
     bool use_viewer = true;
-    if (argc == 5)
-        use_viewer = (std::string(argv[4]) == "no_viewer" ? false : true);
+    // if (argc == 5)
+    //     use_viewer = (std::string(argv[4]) == "no_viewer" ? false : true);
 
-    std::string output_directory = std::string(argv[3]);
-    if (output_directory.back() != '/')
-        output_directory += "/";
-    std::filesystem::path output_dir(output_directory);
+    // std::string output_directory = std::string(argv[3]);
+    // if (output_directory.back() != '/')
+    //     output_directory += "/";
+    // std::filesystem::path output_dir(output_directory);
 
     // Device
     torch::DeviceType device_type;
@@ -60,50 +60,32 @@ int main(int argc, char** argv)
     {
         std::cout << "Training on CPU." << std::endl;
         device_type = torch::kCPU;
-    }        
-    std::string dataset_path = "/home/uav/myproject/GSDF-SLAM/dataset/kitti_04/04";
-    dataloader::DataLoader test=dataloader::DataLoader(dataset_path, 3, device_type);;
-    
-    pcl::visualization::PCLVisualizer viewer("Viewer");
-    viewer.setBackgroundColor(0, 0, 0);
-    viewer.initCameraParameters();
-    viewer.addCoordinateSystem(1.0);
-    
-    for (int i = 0; i < test.dataparser_ptr_->raw_depth_filelists_.size(); ++i) {
-        pcl::PointCloud<pcl::PointXYZRGB> colored_points;
-        cv::Mat image;
-        torch::Tensor pose;
-        test.get_item(i, pose, colored_points, image);
-    
-        if (!viewer.updatePointCloud(colored_points.makeShared(), "colored_cloud")) {
-            viewer.addPointCloud(colored_points.makeShared(), "colored_cloud");
-        }
-        
-        viewer.spinOnce(10);  // 更流畅
-        std::this_thread::sleep_for(std::chrono::milliseconds(30));  // 控帧率
     }
+
+    std::string dataset_path = "/home/uav/myproject/GSDF-SLAM/dataset/kitti_04/04";
+    std::string gaussian_cfg_path = "/home/uav/myproject/GSDF-SLAM/cfg/colmap/gaussian_splatting.yaml";
+    std::string output_dir = "/home/uav/myproject/GSDF-SLAM/result/kitti/04";
+
     // Create GaussianMapper
     // std::filesystem::path gaussian_cfg_path(argv[1]);
-    // std::shared_ptr<GaussianMapper> pGausMapper = std::make_shared<GaussianMapper>(dataset_path, gaussian_cfg_path, output_dir, 0, device_type);
+    std::shared_ptr<GaussianMapper> pGausMapper = std::make_shared<GaussianMapper>(dataset_path, gaussian_cfg_path, output_dir, 0, device_type);
+    std::thread training_thd(&GaussianMapper::run, pGausMapper.get());
+   
 
-    // // Read the colmap scene
-    // pGausMapper->setSensorType(MONOCULAR);
-    // pGausMapper->setColmapDataPath(argv[2]);
-    // readColmapScene(pGausMapper);
+    // Read the colmap scene
+    pGausMapper->setSensorType(MONOCULAR);
 
-    // // Create Gaussian Viewer
-    // std::thread viewer_thd;
-    // std::shared_ptr<ImGuiViewer> pViewer;
-    // if (use_viewer)
-    // {
-    //     pViewer = std::make_shared<ImGuiViewer>(pGausMapper);
-    //     viewer_thd = std::thread(&ImGuiViewer::run, pViewer.get());
-    // }
+    // Create Gaussian Viewer
+    std::thread viewer_thd;
+    std::shared_ptr<ImGuiViewer> pViewer;
+    if (use_viewer)
+    {
+        pViewer = std::make_shared<ImGuiViewer>(pGausMapper);
+        viewer_thd = std::thread(&ImGuiViewer::run, pViewer.get());
+    }
 
-    // // Train and save results
-    // pGausMapper->trainColmap();
-
-    // if (use_viewer)
-    //     viewer_thd.join();
+    training_thd.join();
+    if (use_viewer)
+        viewer_thd.join();
     return 0;
 }

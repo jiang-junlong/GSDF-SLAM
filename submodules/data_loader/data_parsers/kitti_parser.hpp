@@ -1,7 +1,7 @@
 #pragma once
 #include "base_parser.h"
-#include "third_party/utils/coordinates.h"
-#include "third_party/utils/sensor_utils/cameras.hpp"
+#include "submodules/utils/coordinates.h"
+#include "submodules/utils/sensor_utils/cameras.hpp"
 #include <pcl/io/ply_io.h>
 
 namespace dataparser

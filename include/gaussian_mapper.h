@@ -45,16 +45,16 @@
 #include "gaussian_keyframe.h"
 #include "gaussian_scene.h"
 #include "gaussian_trainer.h"
-#include "third_party/data_loader/data_loader.h"
+#include "submodules/data_loader/data_loader.h"
 
-#define CHECK_DIRECTORY_AND_CREATE_IF_NOT_EXISTS(dir)                                       \
-    if (!dir.empty() && !std::filesystem::exists(dir))                                      \
-        if (!std::filesystem::create_directories(dir))                                      \
+#define CHECK_DIRECTORY_AND_CREATE_IF_NOT_EXISTS(dir)  \
+    if (!dir.empty() && !std::filesystem::exists(dir)) \
+        if (!std::filesystem::create_directories(dir)) \
             throw std::runtime_error("Cannot create result directory at " + dir.string());
 struct UndistortParams
 {
     UndistortParams(
-        const cv::Size& old_size,
+        const cv::Size &old_size,
         cv::Mat dist_coeff = (cv::Mat_<float>(1, 4) << 0.0f, 0.0f, 0.0f, 0.0f))
         : old_size_(old_size)
     {
@@ -64,7 +64,6 @@ struct UndistortParams
     cv::Size old_size_;
     cv::Mat dist_coeff_;
 };
-
 
 enum SystemSensorType
 {
@@ -98,6 +97,11 @@ class GaussianMapper
 {
 public:
     GaussianMapper(
+        std::filesystem::path gaussian_config_file_path,
+        std::filesystem::path result_dir = "",
+        int seed = 0,
+        torch::DeviceType device_type = torch::kCUDA);
+    GaussianMapper(
         std::filesystem::path dataset_path,
         std::filesystem::path gaussian_config_file_path,
         std::filesystem::path result_dir = "",
@@ -106,6 +110,7 @@ public:
 
     void readConfigFromFile(std::filesystem::path cfg_path);
 
+    void run();
     void trainColmap();
     void trainForOneIteration();
 
@@ -156,9 +161,9 @@ public:
     VariableParameters getVaribleParameters();
     void setVaribleParameters(const VariableParameters &params);
 
-    GaussianModelParams& getGaussianModelParams() { return this->model_params_; }
-    void setColmapDataPath(std::filesystem::path colmap_path) { this->model_params_.source_path_ = colmap_path; }  // 需要保留
-    void setSensorType(SystemSensorType sensor_type) { this->sensor_type_ = sensor_type; } // 需要保留
+    GaussianModelParams &getGaussianModelParams() { return this->model_params_; }
+    void setColmapDataPath(std::filesystem::path colmap_path) { this->model_params_.source_path_ = colmap_path; } // 需要保留
+    void setSensorType(SystemSensorType sensor_type) { this->sensor_type_ = sensor_type; }                        // 需要保留
 
     void loadPly(std::filesystem::path ply_path, std::filesystem::path camera_path = "");
 
@@ -234,7 +239,7 @@ public:
     std::map<camera_id_t, torch::Tensor> undistort_mask_;
     std::map<camera_id_t, torch::Tensor> viewer_main_undistort_mask_;
     std::map<camera_id_t, torch::Tensor> viewer_sub_undistort_mask_;
-    dataloader::DataLoader::Ptr dataloader_ptr_;  // 数据加载器
+    dataloader::DataLoader::Ptr dataloader_ptr_; // 数据加载器
 
 protected:
     // Parameters

@@ -54,6 +54,61 @@ void GaussianKeyframe::setPose(
     this->set_pose_ = true;
 }
 
+// void GaussianKeyframe::setPose(const torch::Tensor& Tcw) {
+//     // 保证 Tensor 在 CPU 上并且是连续的
+//     const auto Tcw_contig = Tcw.cpu().contiguous();
+
+//     // 构造 Eigen::Matrix4f（行主存储，确保兼容 Torch 内存布局）
+//     Eigen::Matrix<float, 4, 4, Eigen::RowMajor> Tcw_float;
+//     std::memcpy(Tcw_float.data(), Tcw_contig.data_ptr<float>(), sizeof(float) * 16);
+
+//     // 转为 double 精度，并构造 Sophus::SE3d
+//     Eigen::Matrix4d Tcw_double = Tcw_float.cast<double>();
+//     this->Tcw_ = Sophus::SE3d(Tcw_double);
+
+//     // 提取旋转和平移
+//     this->R_quaternion_ = this->Tcw_.unit_quaternion();
+//     this->t_ = this->Tcw_.translation();
+
+//     // 状态标记
+//     this->set_pose_ = true;
+// }
+void GaussianKeyframe::setPose(const torch::Tensor& Tcw) {
+    // 确保 Tcw 是 float32 类型、在 CPU 上、并且是连续的
+    TORCH_CHECK(Tcw.dtype() == torch::kFloat32, "Tcw tensor must be float32.");
+    TORCH_CHECK(Tcw.dim() == 2 && Tcw.size(0) == 4 && Tcw.size(1) == 4, "Tcw must be a 4x4 tensor.");
+
+    const auto Tcw_contig = Tcw.cpu().contiguous();
+
+    // 转为 Eigen::Matrix4f (RowMajor)
+    Eigen::Matrix<float, 4, 4, Eigen::RowMajor> Tcw_float;
+    std::memcpy(Tcw_float.data(), Tcw_contig.data_ptr<float>(), sizeof(float) * 16);
+
+    // 转为 double
+    Eigen::Matrix4d Tcw_double = Tcw_float.cast<double>();
+
+    // 提取旋转和平移
+    Eigen::Matrix3d R = Tcw_double.block<3,3>(0,0);
+    Eigen::Vector3d t = Tcw_double.block<3,1>(0,3);
+
+    // 用 SVD 强制正交化 R
+    Eigen::JacobiSVD<Eigen::Matrix3d> svd(R, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    R = svd.matrixU() * svd.matrixV().transpose();
+
+    // 防止反射：保证 det(R) = +1（否则是旋转加翻转）
+    if (R.determinant() < 0) {
+        R.col(2) *= -1.0;
+    }
+
+    // 构造 SE3d
+    this->Tcw_ = Sophus::SE3d(R, t);
+    this->R_quaternion_ = this->Tcw_.unit_quaternion();
+    this->t_ = this->Tcw_.translation();
+    this->set_pose_ = true;
+}
+
+
+
 Sophus::SE3d GaussianKeyframe::getPose()
 {
     return this->Tcw_;
