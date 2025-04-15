@@ -115,9 +115,9 @@ sensor_msgs::PointCloud2 tensor_to_pointcloud_msg(const torch::Tensor &_xyz,
 
 sensor_msgs::Image tensor_to_img_msg(const torch::Tensor &_image);
 
-visualization_msgs::Marker get_vix_voxel_map(const torch::Tensor &_xyz,
-                                             float voxel_size, float r = 1.0,
-                                             float g = 1.0, float b = 1.0);
+// visualization_msgs::Marker get_vix_voxel_map(const torch::Tensor &_xyz,
+//                                              float voxel_size, float r = 1.0,
+//                                              float g = 1.0, float b = 1.0);
 
 visualization_msgs::Marker get_vis_shift_map(torch::Tensor _pos_W_M,
                                              float _x_min, float _x_max,

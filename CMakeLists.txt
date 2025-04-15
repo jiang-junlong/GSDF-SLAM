@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
 project(photo-slam LANGUAGES CXX CUDA)
 
+option(ENABLE_ROS "Enable ROS support" OFF)
 if(NOT CMAKE_BUILD_TYPE)
     # set(CMAKE_BUILD_TYPE Debug)
     set(CMAKE_BUILD_TYPE Release)
@@ -28,6 +29,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS} -pthread")
 find_package(CUDA REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV 4 REQUIRED)
+message(STATUS "OpenCV include dirs: ${OpenCV_INCLUDE_DIRS}")
+message(STATUS "OpenCV libs: ${OpenCV_LIBS}")
+
 find_package(jsoncpp REQUIRED)
 
 find_package(OpenGL REQUIRED)
@@ -38,7 +42,6 @@ find_package(realsense2)
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE INTERNAL "No dev warnings") # 关闭pcl烦人的警告
 find_package(PCL REQUIRED)
 
-set(ORB_SLAM3_SOURCE_DIR "${PROJECT_SOURCE_DIR}/ORB-SLAM3")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
@@ -47,9 +50,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/third_party/Sophus
     ${EIGEN3_INCLUDE_DIR}
     ${OPENGL_INCLUDE_DIR}
+    ${OpenCV_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
     )
-
 ##################################################################################
 ##  Build the gaussian splatting component libraries to ${PROJECT_SOURCE_DIR}/lib
 ##################################################################################
@@ -173,20 +176,53 @@ target_link_libraries(gaussian_viewer
     glfw
     OpenGL::GL)
 
+
+##################################################################################
+# Dataloader
+##################################################################################
+find_package(catkin REQUIRED)
+
+add_library(ply_utils third_party/utils/ply_utils/ply_utils_pcl.cpp
+                      third_party/utils/ply_utils/ply_utils_torch.cpp)
+target_link_libraries(ply_utils  
+                      ${PCL_LIBRARIES}
+                      ${TORCH_LIBRARIES}
+                      ${catkin_LIBRARIES})
+add_library(data_parser third_party/data_loader/data_parsers/base_parser.cpp
+                        third_party/params/params.cpp
+                        third_party/utils/utils.cpp)
+target_link_libraries(data_parser ${TORCH_LIBRARIES} ply_utils ${OpenCV_LIBS} ${catkin_LIBRARIES})
+
+add_library(ray_utils third_party/utils/ray_utils/ray_utils.cpp)
+target_link_libraries(ray_utils ${TORCH_LIBRARIES})
+
+add_library(data_loader third_party/data_loader/data_loader.cpp
+                        third_party/utils/coordinates.cpp
+                        )
+target_link_libraries(data_loader data_parser ray_utils)
+
+
 ##################################################################################
 ##  Build the test examples to ${PROJECT_SOURCE_DIR}/bin
 ##################################################################################
 
 # This is a C++ libtorch implementation of gaussian-splatting (https://github.com/graphdeco-inria/gaussian-splatting)
-add_executable(train_colmap examples/train_colmap.cpp)
-target_link_libraries(train_colmap
-    gaussian_viewer
-    gaussian_mapper)
+# add_executable(train_colmap examples/train_colmap.cpp)
+# target_link_libraries(train_colmap
+#     gaussian_viewer
+#     gaussian_mapper)
 
-add_executable(view_result examples/view_result.cpp)
-target_link_libraries(view_result
-    gaussian_viewer
-    gaussian_mapper)
+# add_executable(view_result examples/view_result.cpp)
+# target_link_libraries(view_result
+#     gaussian_viewer
+#     gaussian_mapper)
+
+add_executable(train_kitti examples/train_kitti.cpp)
+target_link_libraries(train_kitti
+        gaussian_viewer
+        gaussian_mapper
+        data_loader
+        )
 
 
 

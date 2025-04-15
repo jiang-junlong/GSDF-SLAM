@@ -73,51 +73,51 @@ GaussianMapper::GaussianMapper(
     gaussians_ = std::make_shared<GaussianModel>(model_params_);
     scene_ = std::make_shared<GaussianScene>(model_params_);
 
-    if (dataset_path)
-    {
-        cv::FileStorage fsSettings(_config_path, cv::FileStorage::READ);
-        if (!fsSettings.isOpened())
-        {
-            std::cerr << "ERROR: Wrong path to settings: " << _config_path << "\n";
-            exit(-1);
-        }
-        std::filesystem::path dataset_path = fsSettings["data_path"]; // 数据集路径
-        int dataset_type = fsSettings["dataset_type"];
-        float res_scale = 1.0f;
-        sensor::Sensors sensor;
-        if (!fsSettings["camera"].isNone())
-        {
-            sensor.camera.model = fsSettings["camera"]["model"];
-            sensor.camera.width = fsSettings["camera"]["width"];
-            sensor.camera.height = fsSettings["camera"]["height"];
-            sensor.camera.fx = fsSettings["camera"]["fx"];
-            sensor.camera.fy = fsSettings["camera"]["fy"];
-            sensor.camera.cx = fsSettings["camera"]["cx"];
-            sensor.camera.cy = fsSettings["camera"]["cy"];
+    // if (dataset_path)
+    // {
+    //     cv::FileStorage fsSettings(_config_path, cv::FileStorage::READ);
+    //     if (!fsSettings.isOpened())
+    //     {
+    //         std::cerr << "ERROR: Wrong path to settings: " << _config_path << "\n";
+    //         exit(-1);
+    //     }
+    //     std::filesystem::path dataset_path = fsSettings["data_path"]; // 数据集路径
+    //     int dataset_type = fsSettings["dataset_type"];
+    //     float res_scale = 1.0f;
+    //     sensor::Sensors sensor;
+    //     if (!fsSettings["camera"].isNone())
+    //     {
+    //         sensor.camera.model = fsSettings["camera"]["model"];
+    //         sensor.camera.width = fsSettings["camera"]["width"];
+    //         sensor.camera.height = fsSettings["camera"]["height"];
+    //         sensor.camera.fx = fsSettings["camera"]["fx"];
+    //         sensor.camera.fy = fsSettings["camera"]["fy"];
+    //         sensor.camera.cx = fsSettings["camera"]["cx"];
+    //         sensor.camera.cy = fsSettings["camera"]["cy"];
 
-            sensor.camera.set_distortion(
-                fsSettings["camera"]["d0"], fsSettings["camera"]["d1"],
-                fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
-                fsSettings["camera"]["d4"]);
-        }
-        if (!fsSettings["extrinsic"].isNone())
-        {
-            cv::Mat cv_T_C_L;
-            fsSettings["extrinsic"]["T_C_L"] >> cv_T_C_L;
-            cv_T_C_L.convertTo(cv_T_C_L, CV_32FC1);
-            sensor.T_C_L =
-                torch::from_blob(cv_T_C_L.data, {4, 4}, torch::kFloat32).clone();
+    //         sensor.camera.set_distortion(
+    //             fsSettings["camera"]["d0"], fsSettings["camera"]["d1"],
+    //             fsSettings["camera"]["d2"], fsSettings["camera"]["d3"],
+    //             fsSettings["camera"]["d4"]);
+    //     }
+    //     if (!fsSettings["extrinsic"].isNone())
+    //     {
+    //         cv::Mat cv_T_C_L;
+    //         fsSettings["extrinsic"]["T_C_L"] >> cv_T_C_L;
+    //         cv_T_C_L.convertTo(cv_T_C_L, CV_32FC1);
+    //         sensor.T_C_L =
+    //             torch::from_blob(cv_T_C_L.data, {4, 4}, torch::kFloat32).clone();
 
-            cv::Mat cv_T_B_L;
-            fsSettings["extrinsic"]["T_B_L"] >> cv_T_B_L;
-            cv_T_B_L.convertTo(cv_T_B_L, CV_32FC1);
-            sensor.T_B_L =
-                torch::from_blob(cv_T_B_L.data, {4, 4}, torch::kFloat32).clone();
+    //         cv::Mat cv_T_B_L;
+    //         fsSettings["extrinsic"]["T_B_L"] >> cv_T_B_L;
+    //         cv_T_B_L.convertTo(cv_T_B_L, CV_32FC1);
+    //         sensor.T_B_L =
+    //             torch::from_blob(cv_T_B_L.data, {4, 4}, torch::kFloat32).clone();
 
-            sensor.T_B_C = sensor.T_B_L.matmul(sensor.T_C_L.inverse());
-        }
-        dataloader_ptr_ = std::make_unique<dataloader::DataLoader>(dataset_path, dataset_type, device_type, false, res_scale, sensor);
-    }
+    //         sensor.T_B_C = sensor.T_B_L.matmul(sensor.T_C_L.inverse());
+    //     }
+    //     dataloader_ptr_ = std::make_unique<dataloader::DataLoader>(dataset_path, dataset_type, device_type, false, res_scale, sensor);
+    // }
 }
 
 void GaussianMapper::readConfigFromFile(std::filesystem::path cfg_path)
@@ -239,319 +239,319 @@ void GaussianMapper::readConfigFromFile(std::filesystem::path cfg_path)
 }
 
 
-/**
- * @brief The training iteration body
- * 
- */
-void GaussianMapper::trainForOneIteration()
-{
-    increaseIteration(1);   // 训练次数+1
-    auto iter_start_timing = std::chrono::steady_clock::now();
+// /**
+//  * @brief The training iteration body
+//  * 
+//  */
+// void GaussianMapper::trainForOneIteration()
+// {
+//     increaseIteration(1);   // 训练次数+1
+//     auto iter_start_timing = std::chrono::steady_clock::now();
 
-    // Pick a random Camera
-    std::shared_ptr<GaussianKeyframe> viewpoint_cam = useOneRandomSlidingWindowKeyframe();
-    if (!viewpoint_cam) {
-        increaseIteration(-1);
-        return;
-    }
+//     // Pick a random Camera
+//     std::shared_ptr<GaussianKeyframe> viewpoint_cam = useOneRandomSlidingWindowKeyframe();
+//     if (!viewpoint_cam) {
+//         increaseIteration(-1);
+//         return;
+//     }
 
-    writeKeyframeUsedTimes(result_dir_ / "used_times");
+//     writeKeyframeUsedTimes(result_dir_ / "used_times");
 
-    // if (isdoingInactiveGeoDensify() && !viewpoint_cam->done_inactive_geo_densify_)
-    //     increasePcdByKeyframeInactiveGeoDensify(viewpoint_cam);
+//     // if (isdoingInactiveGeoDensify() && !viewpoint_cam->done_inactive_geo_densify_)
+//     //     increasePcdByKeyframeInactiveGeoDensify(viewpoint_cam);
 
-    int training_level = num_gaus_pyramid_sub_levels_;
-    int image_height, image_width;
-    torch::Tensor gt_image, mask;
-    if (isdoingGausPyramidTraining())
-        training_level = viewpoint_cam->getCurrentGausPyramidLevel();
-    if (training_level == num_gaus_pyramid_sub_levels_) {
-        image_height = viewpoint_cam->image_height_;
-        image_width = viewpoint_cam->image_width_;
-        gt_image = viewpoint_cam->original_image_.cuda();
-        mask = undistort_mask_[viewpoint_cam->camera_id_];
-    }
-    else {
-        image_height = viewpoint_cam->gaus_pyramid_height_[training_level];
-        image_width = viewpoint_cam->gaus_pyramid_width_[training_level];
-        gt_image = viewpoint_cam->gaus_pyramid_original_image_[training_level].cuda();
-        mask = scene_->cameras_.at(viewpoint_cam->camera_id_).gaus_pyramid_undistort_mask_[training_level];
-    }
+//     int training_level = num_gaus_pyramid_sub_levels_;
+//     int image_height, image_width;
+//     torch::Tensor gt_image, mask;
+//     if (isdoingGausPyramidTraining())
+//         training_level = viewpoint_cam->getCurrentGausPyramidLevel();
+//     if (training_level == num_gaus_pyramid_sub_levels_) {
+//         image_height = viewpoint_cam->image_height_;
+//         image_width = viewpoint_cam->image_width_;
+//         gt_image = viewpoint_cam->original_image_.cuda();
+//         mask = undistort_mask_[viewpoint_cam->camera_id_];
+//     }
+//     else {
+//         image_height = viewpoint_cam->gaus_pyramid_height_[training_level];
+//         image_width = viewpoint_cam->gaus_pyramid_width_[training_level];
+//         gt_image = viewpoint_cam->gaus_pyramid_original_image_[training_level].cuda();
+//         mask = scene_->cameras_.at(viewpoint_cam->camera_id_).gaus_pyramid_undistort_mask_[training_level];
+//     }
 
-    // Mutex lock for usage of the gaussian model
-    std::unique_lock<std::mutex> lock_render(mutex_render_);
+//     // Mutex lock for usage of the gaussian model
+//     std::unique_lock<std::mutex> lock_render(mutex_render_);
 
-    // Every 1000 its we increase the levels of SH up to a maximum degree
-    if (getIteration() % 1000 == 0 && default_sh_ < model_params_.sh_degree_)
-        default_sh_ += 1;
-    // if (isdoingGausPyramidTraining())
-    //     gaussians_->setShDegree(training_level);
-    // else
-        gaussians_->setShDegree(default_sh_);
+//     // Every 1000 its we increase the levels of SH up to a maximum degree
+//     if (getIteration() % 1000 == 0 && default_sh_ < model_params_.sh_degree_)
+//         default_sh_ += 1;
+//     // if (isdoingGausPyramidTraining())
+//     //     gaussians_->setShDegree(training_level);
+//     // else
+//         gaussians_->setShDegree(default_sh_);
 
-    // Update learning rate
-    if (pSLAM_) {
-        int used_times = kfs_used_times_[viewpoint_cam->fid_];
-        int step = (used_times <= opt_params_.position_lr_max_steps_ ? used_times : opt_params_.position_lr_max_steps_);
-        float position_lr = gaussians_->updateLearningRate(step);
-        setPositionLearningRateInit(position_lr);
-    }
-    else {
-        gaussians_->updateLearningRate(getIteration());
-    }
+//     // Update learning rate
+//     if (pSLAM_) {
+//         int used_times = kfs_used_times_[viewpoint_cam->fid_];
+//         int step = (used_times <= opt_params_.position_lr_max_steps_ ? used_times : opt_params_.position_lr_max_steps_);
+//         float position_lr = gaussians_->updateLearningRate(step);
+//         setPositionLearningRateInit(position_lr);
+//     }
+//     else {
+//         gaussians_->updateLearningRate(getIteration());
+//     }
 
-    gaussians_->setFeatureLearningRate(featureLearningRate());
-    gaussians_->setOpacityLearningRate(opacityLearningRate());
-    gaussians_->setScalingLearningRate(scalingLearningRate());
-    gaussians_->setRotationLearningRate(rotationLearningRate());
+//     gaussians_->setFeatureLearningRate(featureLearningRate());
+//     gaussians_->setOpacityLearningRate(opacityLearningRate());
+//     gaussians_->setScalingLearningRate(scalingLearningRate());
+//     gaussians_->setRotationLearningRate(rotationLearningRate());
 
-    // Render
-    auto render_pkg = GaussianRenderer::render(
-        viewpoint_cam,
-        image_height,
-        image_width,
-        gaussians_,
-        pipe_params_,
-        background_,
-        override_color_
-    );
-    auto rendered_image = std::get<0>(render_pkg);
-    auto viewspace_point_tensor = std::get<1>(render_pkg);
-    auto visibility_filter = std::get<2>(render_pkg);
-    auto radii = std::get<3>(render_pkg);
+//     // Render
+//     auto render_pkg = GaussianRenderer::render(
+//         viewpoint_cam,
+//         image_height,
+//         image_width,
+//         gaussians_,
+//         pipe_params_,
+//         background_,
+//         override_color_
+//     );
+//     auto rendered_image = std::get<0>(render_pkg);
+//     auto viewspace_point_tensor = std::get<1>(render_pkg);
+//     auto visibility_filter = std::get<2>(render_pkg);
+//     auto radii = std::get<3>(render_pkg);
 
-    // Get rid of black edges caused by undistortion
-    torch::Tensor masked_image = rendered_image * mask;
+//     // Get rid of black edges caused by undistortion
+//     torch::Tensor masked_image = rendered_image * mask;
 
-    // Loss
-    auto Ll1 = loss_utils::l1_loss(masked_image, gt_image);
-    float lambda_dssim = lambdaDssim();
-    auto loss = (1.0 - lambda_dssim) * Ll1
-                + lambda_dssim * (1.0 - loss_utils::ssim(masked_image, gt_image, device_type_));
-    loss.backward();
+//     // Loss
+//     auto Ll1 = loss_utils::l1_loss(masked_image, gt_image);
+//     float lambda_dssim = lambdaDssim();
+//     auto loss = (1.0 - lambda_dssim) * Ll1
+//                 + lambda_dssim * (1.0 - loss_utils::ssim(masked_image, gt_image, device_type_));
+//     loss.backward();
 
-    torch::cuda::synchronize();
+//     torch::cuda::synchronize();
 
-    {
-        torch::NoGradGuard no_grad;
-        ema_loss_for_log_ = 0.4f * loss.item().toFloat() + 0.6 * ema_loss_for_log_;
+//     {
+//         torch::NoGradGuard no_grad;
+//         ema_loss_for_log_ = 0.4f * loss.item().toFloat() + 0.6 * ema_loss_for_log_;
 
-        if (keyframe_record_interval_ &&
-            getIteration() % keyframe_record_interval_ == 0)
-            recordKeyframeRendered(masked_image, gt_image, viewpoint_cam->fid_, result_dir_, result_dir_, result_dir_);
+//         if (keyframe_record_interval_ &&
+//             getIteration() % keyframe_record_interval_ == 0)
+//             recordKeyframeRendered(masked_image, gt_image, viewpoint_cam->fid_, result_dir_, result_dir_, result_dir_);
 
-        // Densification
-        if (getIteration() < opt_params_.densify_until_iter_) {
-            // Keep track of max radii in image-space for pruning
-            gaussians_->max_radii2D_.index_put_(
-                {visibility_filter},
-                torch::max(gaussians_->max_radii2D_.index({visibility_filter}),
-                            radii.index({visibility_filter})));
-            // if (!isdoingGausPyramidTraining() || training_level < num_gaus_pyramid_sub_levels_)
-                gaussians_->addDensificationStats(viewspace_point_tensor, visibility_filter);
+//         // Densification
+//         if (getIteration() < opt_params_.densify_until_iter_) {
+//             // Keep track of max radii in image-space for pruning
+//             gaussians_->max_radii2D_.index_put_(
+//                 {visibility_filter},
+//                 torch::max(gaussians_->max_radii2D_.index({visibility_filter}),
+//                             radii.index({visibility_filter})));
+//             // if (!isdoingGausPyramidTraining() || training_level < num_gaus_pyramid_sub_levels_)
+//                 gaussians_->addDensificationStats(viewspace_point_tensor, visibility_filter);
 
-            if ((getIteration() > opt_params_.densify_from_iter_) &&
-                (getIteration() % densifyInterval()== 0)) {
-                int size_threshold = (getIteration() > prune_big_point_after_iter_) ? 20 : 0;
-                gaussians_->densifyAndPrune(
-                    densifyGradThreshold(),
-                    densify_min_opacity_,//0.005,//
-                    scene_->cameras_extent_,
-                    size_threshold
-                );
-            }
+//             if ((getIteration() > opt_params_.densify_from_iter_) &&
+//                 (getIteration() % densifyInterval()== 0)) {
+//                 int size_threshold = (getIteration() > prune_big_point_after_iter_) ? 20 : 0;
+//                 gaussians_->densifyAndPrune(
+//                     densifyGradThreshold(),
+//                     densify_min_opacity_,//0.005,//
+//                     scene_->cameras_extent_,
+//                     size_threshold
+//                 );
+//             }
 
-            if (opacityResetInterval()
-                && (getIteration() % opacityResetInterval() == 0
-                    ||(model_params_.white_background_ && getIteration() == opt_params_.densify_from_iter_)))
-                gaussians_->resetOpacity();
-        }
+//             if (opacityResetInterval()
+//                 && (getIteration() % opacityResetInterval() == 0
+//                     ||(model_params_.white_background_ && getIteration() == opt_params_.densify_from_iter_)))
+//                 gaussians_->resetOpacity();
+//         }
 
-        auto iter_end_timing = std::chrono::steady_clock::now();
-        auto iter_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        iter_end_timing - iter_start_timing).count();
+//         auto iter_end_timing = std::chrono::steady_clock::now();
+//         auto iter_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+//                         iter_end_timing - iter_start_timing).count();
 
-        // Log and save
-        if (training_report_interval_ && (getIteration() % training_report_interval_ == 0))
-            GaussianTrainer::trainingReport(
-                getIteration(),
-                opt_params_.iterations_,
-                Ll1,
-                loss,
-                ema_loss_for_log_,
-                loss_utils::l1_loss,
-                iter_time,
-                *gaussians_,
-                *scene_,
-                pipe_params_,
-                background_
-            );
-        if ((all_keyframes_record_interval_ && getIteration() % all_keyframes_record_interval_ == 0)
-            // || loop_closure_iteration_
-            )
-        {
-            renderAndRecordAllKeyframes();
-            savePly(result_dir_ / std::to_string(getIteration()) / "ply");
-        }
+//         // Log and save
+//         if (training_report_interval_ && (getIteration() % training_report_interval_ == 0))
+//             GaussianTrainer::trainingReport(
+//                 getIteration(),
+//                 opt_params_.iterations_,
+//                 Ll1,
+//                 loss,
+//                 ema_loss_for_log_,
+//                 loss_utils::l1_loss,
+//                 iter_time,
+//                 *gaussians_,
+//                 *scene_,
+//                 pipe_params_,
+//                 background_
+//             );
+//         if ((all_keyframes_record_interval_ && getIteration() % all_keyframes_record_interval_ == 0)
+//             // || loop_closure_iteration_
+//             )
+//         {
+//             renderAndRecordAllKeyframes();
+//             savePly(result_dir_ / std::to_string(getIteration()) / "ply");
+//         }
 
-        if (loop_closure_iteration_)
-            loop_closure_iteration_ = false;
+//         if (loop_closure_iteration_)
+//             loop_closure_iteration_ = false;
 
-        // Optimizer step
-        if (getIteration() < opt_params_.iterations_) {
-            gaussians_->optimizer_->step();
-            gaussians_->optimizer_->zero_grad(true);
-        }
-    }
-}
+//         // Optimizer step
+//         if (getIteration() < opt_params_.iterations_) {
+//             gaussians_->optimizer_->step();
+//             gaussians_->optimizer_->zero_grad(true);
+//         }
+//     }
+// }
 
-void GaussianMapper::run()
-{
-    // First loop: Initial gaussian mapping
-    while (!isStopped())
-    {
-        // Check conditions for initial mapping
-        if (hasMetInitialMappingConditions())
-        {
-            // pSLAM_->getAtlas()->clearMappingOperation();
-            // dataloader_ptr_->get_item()
+// void GaussianMapper::run()
+// {
+//     // First loop: Initial gaussian mapping
+//     while (!isStopped())
+//     {
+//         // Check conditions for initial mapping
+//         if (hasMetInitialMappingConditions())
+//         {
+//             // pSLAM_->getAtlas()->clearMappingOperation();
+//             // dataloader_ptr_->get_item()
 
-            // 这里需要获取真值位姿
-            // Get initial sparse map
-            auto pMap = pSLAM_->getAtlas()->GetCurrentMap();
-            std::vector<ORB_SLAM3::KeyFrame *> vpKFs;  // 获取所有关键帧
-            std::vector<ORB_SLAM3::MapPoint *> vpMPs;  // 获取所有地图点
-            {
-                std::unique_lock<std::mutex> lock_map(pMap->mMutexMapUpdate);
-                vpKFs = pMap->GetAllKeyFrames();
-                vpMPs = pMap->GetAllMapPoints(); // 获取所有地图点
-                for (const auto &pMP : vpMPs)
-                {
-                    Point3D point3D;
-                    auto pos = pMP->GetWorldPos();
-                    point3D.xyz_(0) = pos.x();
-                    point3D.xyz_(1) = pos.y();
-                    point3D.xyz_(2) = pos.z();
-                    auto color = pMP->GetColorRGB();
-                    point3D.color_(0) = color(0);
-                    point3D.color_(1) = color(1);
-                    point3D.color_(2) = color(2);
-                    scene_->cachePoint3D(pMP->mnId, point3D); // 缓存地图点
-                }
-                for (const auto &pKF : vpKFs)
-                {
-                    std::shared_ptr<GaussianKeyframe> new_kf = std::make_shared<GaussianKeyframe>(pKF->mnId, getIteration());
-                    new_kf->zfar_ = z_far_;
-                    new_kf->znear_ = z_near_;
-                    // Pose
-                    auto pose = pKF->GetPose();
-                    new_kf->setPose(
-                        pose.unit_quaternion().cast<double>(),
-                        pose.translation().cast<double>());
-                    cv::Mat imgRGB_undistorted, imgAux_undistorted;
-                    try
-                    {
-                        // Camera
-                        Camera &camera = scene_->cameras_.at(pKF->mpCamera->GetId());
-                        new_kf->setCameraParams(camera);
+//             // 这里需要获取真值位姿
+//             // Get initial sparse map
+//             auto pMap = pSLAM_->getAtlas()->GetCurrentMap();
+//             std::vector<ORB_SLAM3::KeyFrame *> vpKFs;  // 获取所有关键帧
+//             std::vector<ORB_SLAM3::MapPoint *> vpMPs;  // 获取所有地图点
+//             {
+//                 std::unique_lock<std::mutex> lock_map(pMap->mMutexMapUpdate);
+//                 vpKFs = pMap->GetAllKeyFrames();
+//                 vpMPs = pMap->GetAllMapPoints(); // 获取所有地图点
+//                 for (const auto &pMP : vpMPs)
+//                 {
+//                     Point3D point3D;
+//                     auto pos = pMP->GetWorldPos();
+//                     point3D.xyz_(0) = pos.x();
+//                     point3D.xyz_(1) = pos.y();
+//                     point3D.xyz_(2) = pos.z();
+//                     auto color = pMP->GetColorRGB();
+//                     point3D.color_(0) = color(0);
+//                     point3D.color_(1) = color(1);
+//                     point3D.color_(2) = color(2);
+//                     scene_->cachePoint3D(pMP->mnId, point3D); // 缓存地图点
+//                 }
+//                 for (const auto &pKF : vpKFs)
+//                 {
+//                     std::shared_ptr<GaussianKeyframe> new_kf = std::make_shared<GaussianKeyframe>(pKF->mnId, getIteration());
+//                     new_kf->zfar_ = z_far_;
+//                     new_kf->znear_ = z_near_;
+//                     // Pose
+//                     auto pose = pKF->GetPose();
+//                     new_kf->setPose(
+//                         pose.unit_quaternion().cast<double>(),
+//                         pose.translation().cast<double>());
+//                     cv::Mat imgRGB_undistorted, imgAux_undistorted;
+//                     try
+//                     {
+//                         // Camera
+//                         Camera &camera = scene_->cameras_.at(pKF->mpCamera->GetId());
+//                         new_kf->setCameraParams(camera);
 
-                        // Image (left if STEREO)
-                        cv::Mat imgRGB = pKF->imgLeftRGB;
-                        if (this->sensor_type_ == STEREO)
-                            imgRGB_undistorted = imgRGB;
-                        else
-                            camera.undistortImage(imgRGB, imgRGB_undistorted);
-                        // Auxiliary Image
-                        cv::Mat imgAux = pKF->imgAuxiliary;
-                        if (this->sensor_type_ == RGBD)
-                            camera.undistortImage(imgAux, imgAux_undistorted);
-                        else
-                            imgAux_undistorted = imgAux;
+//                         // Image (left if STEREO)
+//                         cv::Mat imgRGB = pKF->imgLeftRGB;
+//                         if (this->sensor_type_ == STEREO)
+//                             imgRGB_undistorted = imgRGB;
+//                         else
+//                             camera.undistortImage(imgRGB, imgRGB_undistorted);
+//                         // Auxiliary Image
+//                         cv::Mat imgAux = pKF->imgAuxiliary;
+//                         if (this->sensor_type_ == RGBD)
+//                             camera.undistortImage(imgAux, imgAux_undistorted);
+//                         else
+//                             imgAux_undistorted = imgAux;
 
-                        new_kf->original_image_ =
-                            tensor_utils::cvMat2TorchTensor_Float32(imgRGB_undistorted, device_type_);
-                        new_kf->img_filename_ = pKF->mNameFile;
-                        new_kf->gaus_pyramid_height_ = camera.gaus_pyramid_height_;
-                        new_kf->gaus_pyramid_width_ = camera.gaus_pyramid_width_;
-                        new_kf->gaus_pyramid_times_of_use_ = kf_gaus_pyramid_times_of_use_;
-                    }
-                    catch (std::out_of_range)
-                    {
-                        throw std::runtime_error("[GaussianMapper::run]KeyFrame Camera not found!");
-                    }
-                    new_kf->computeTransformTensors();
-                    scene_->addKeyframe(new_kf, &kfid_shuffled_);
+//                         new_kf->original_image_ =
+//                             tensor_utils::cvMat2TorchTensor_Float32(imgRGB_undistorted, device_type_);
+//                         new_kf->img_filename_ = pKF->mNameFile;
+//                         new_kf->gaus_pyramid_height_ = camera.gaus_pyramid_height_;
+//                         new_kf->gaus_pyramid_width_ = camera.gaus_pyramid_width_;
+//                         new_kf->gaus_pyramid_times_of_use_ = kf_gaus_pyramid_times_of_use_;
+//                     }
+//                     catch (std::out_of_range)
+//                     {
+//                         throw std::runtime_error("[GaussianMapper::run]KeyFrame Camera not found!");
+//                     }
+//                     new_kf->computeTransformTensors();
+//                     scene_->addKeyframe(new_kf, &kfid_shuffled_);
 
-                    increaseKeyframeTimesOfUse(new_kf, newKeyframeTimesOfUse());
+//                     increaseKeyframeTimesOfUse(new_kf, newKeyframeTimesOfUse());
 
-                    // Features
-                    std::vector<float> pixels;
-                    std::vector<float> pointsLocal;
-                    pKF->GetKeypointInfo(pixels, pointsLocal);
-                    new_kf->kps_pixel_ = std::move(pixels);
-                    new_kf->kps_point_local_ = std::move(pointsLocal);
-                    new_kf->img_undist_ = imgRGB_undistorted;
-                    new_kf->img_auxiliary_undist_ = imgAux_undistorted;
-                }
-            }
+//                     // Features
+//                     std::vector<float> pixels;
+//                     std::vector<float> pointsLocal;
+//                     pKF->GetKeypointInfo(pixels, pointsLocal);
+//                     new_kf->kps_pixel_ = std::move(pixels);
+//                     new_kf->kps_point_local_ = std::move(pointsLocal);
+//                     new_kf->img_undist_ = imgRGB_undistorted;
+//                     new_kf->img_auxiliary_undist_ = imgAux_undistorted;
+//                 }
+//             }
 
-            // Prepare multi resolution images for training
-            for (auto &kfit : scene_->keyframes())
-            {
-                auto pkf = kfit.second;
-                if (device_type_ == torch::kCUDA)
-                {
-                    cv::cuda::GpuMat img_gpu;
-                    img_gpu.upload(pkf->img_undist_);
-                    pkf->gaus_pyramid_original_image_.resize(num_gaus_pyramid_sub_levels_);
-                    for (int l = 0; l < num_gaus_pyramid_sub_levels_; ++l)
-                    {
-                        cv::cuda::GpuMat img_resized;
-                        cv::cuda::resize(img_gpu, img_resized,
-                                         cv::Size(pkf->gaus_pyramid_width_[l], pkf->gaus_pyramid_height_[l]));
-                        pkf->gaus_pyramid_original_image_[l] =
-                            tensor_utils::cvGpuMat2TorchTensor_Float32(img_resized);
-                    }
-                }
-                else
-                {
-                    pkf->gaus_pyramid_original_image_.resize(num_gaus_pyramid_sub_levels_);
-                    for (int l = 0; l < num_gaus_pyramid_sub_levels_; ++l)
-                    {
-                        cv::Mat img_resized;
-                        cv::resize(pkf->img_undist_, img_resized,
-                                   cv::Size(pkf->gaus_pyramid_width_[l], pkf->gaus_pyramid_height_[l]));
-                        pkf->gaus_pyramid_original_image_[l] =
-                            tensor_utils::cvMat2TorchTensor_Float32(img_resized, device_type_);
-                    }
-                }
-            }
+//             // Prepare multi resolution images for training
+//             for (auto &kfit : scene_->keyframes())
+//             {
+//                 auto pkf = kfit.second;
+//                 if (device_type_ == torch::kCUDA)
+//                 {
+//                     cv::cuda::GpuMat img_gpu;
+//                     img_gpu.upload(pkf->img_undist_);
+//                     pkf->gaus_pyramid_original_image_.resize(num_gaus_pyramid_sub_levels_);
+//                     for (int l = 0; l < num_gaus_pyramid_sub_levels_; ++l)
+//                     {
+//                         cv::cuda::GpuMat img_resized;
+//                         cv::cuda::resize(img_gpu, img_resized,
+//                                          cv::Size(pkf->gaus_pyramid_width_[l], pkf->gaus_pyramid_height_[l]));
+//                         pkf->gaus_pyramid_original_image_[l] =
+//                             tensor_utils::cvGpuMat2TorchTensor_Float32(img_resized);
+//                     }
+//                 }
+//                 else
+//                 {
+//                     pkf->gaus_pyramid_original_image_.resize(num_gaus_pyramid_sub_levels_);
+//                     for (int l = 0; l < num_gaus_pyramid_sub_levels_; ++l)
+//                     {
+//                         cv::Mat img_resized;
+//                         cv::resize(pkf->img_undist_, img_resized,
+//                                    cv::Size(pkf->gaus_pyramid_width_[l], pkf->gaus_pyramid_height_[l]));
+//                         pkf->gaus_pyramid_original_image_[l] =
+//                             tensor_utils::cvMat2TorchTensor_Float32(img_resized, device_type_);
+//                     }
+//                 }
+//             }
 
-            // Prepare for training
-            {
-                std::unique_lock<std::mutex> lock_render(mutex_render_);
-                scene_->cameras_extent_ = std::get<1>(scene_->getNerfppNorm());
-                gaussians_->createFromPcd(scene_->cached_point_cloud_, scene_->cameras_extent_); // 从缓存点云中创建gaussians
-                std::unique_lock<std::mutex> lock(mutex_settings_);
-                gaussians_->trainingSetup(opt_params_);
-            }
+//             // Prepare for training
+//             {
+//                 std::unique_lock<std::mutex> lock_render(mutex_render_);
+//                 scene_->cameras_extent_ = std::get<1>(scene_->getNerfppNorm());
+//                 gaussians_->createFromPcd(scene_->cached_point_cloud_, scene_->cameras_extent_); // 从缓存点云中创建gaussians
+//                 std::unique_lock<std::mutex> lock(mutex_settings_);
+//                 gaussians_->trainingSetup(opt_params_);
+//             }
 
-            // Invoke training once 
-            trainForOneIteration();
+//             // Invoke training once 
+//             trainForOneIteration();
 
-            // Finish initial mapping loop
-            initial_mapped_ = true;
-            break;
-        }
+//             // Finish initial mapping loop
+//             initial_mapped_ = true;
+//             break;
+//         }
 
-    }
-    // Save and clear
-    // renderAndRecordAllKeyframes("_shutdown");
-    // savePly(result_dir_ / (std::to_string(getIteration()) + "_shutdown") / "ply");
-    // writeKeyframeUsedTimes(result_dir_ / "used_times", "final");
+//     }
+//     // Save and clear
+//     // renderAndRecordAllKeyframes("_shutdown");
+//     // savePly(result_dir_ / (std::to_string(getIteration()) + "_shutdown") / "ply");
+//     // writeKeyframeUsedTimes(result_dir_ / "used_times", "final");
 
-    // signalStop();
-}
+//     // signalStop();
+// }
 
 void GaussianMapper::trainColmap()
 {
