@@ -217,7 +217,7 @@ target_link_libraries(data_loader data_parser ray_utils)
 #     gaussian_viewer
 #     gaussian_mapper)
 
-add_executable(train_kitti examples/train_kitti.cpp)
+add_executable(train_kitti demo/train_kitti.cpp)
 target_link_libraries(train_kitti
         gaussian_viewer
         gaussian_mapper
