@@ -253,30 +253,12 @@ void GaussianMapper::run()
     size_t n = dataloader_ptr_->dataparser_ptr_->raw_depth_filelists_.size();
     for (int i = 0; i < n; ++i)
     {
-        std::cout << "Processing idx:" << i << ", " << (i+1) << "/" << n << "\r";
+        std::cout << "Processing idx:" << i << ", " << (i + 1) << "/" << n << "\r";
         std::cout.flush();
-        pcl::PointCloud<pcl::PointXYZRGB> colored_points;
         cv::Mat image;
-        torch::Tensor lidar_pose, cam_pose;
-        dataloader_ptr_->get_item(i, lidar_pose, cam_pose, colored_points, image);
+        torch::Tensor cam_pose, point_cloud, color;
+        dataloader_ptr_->get_item(i, cam_pose, point_cloud, color, image);
 
-        // 初始化高斯
-        for (const auto &point : colored_points.points)
-        {
-            Point3D point3D;
-            point3D.xyz_(0) = point.x;
-            point3D.xyz_(1) = point.y;
-            point3D.xyz_(2) = point.z;
-            point3D.color_(0) = point.r / 255.0f;
-            point3D.color_(1) = point.g / 255.0f;
-            point3D.color_(2) = point.b / 255.0f;
-            point3D.color256_(0) = point.r;
-            point3D.color256_(1) = point.g;
-            point3D.color256_(2) = point.b;
-            scene_->cachePoint3D(point3D_id, point3D);
-            point3D_id++;
-        }
-        
         // camera
         class Camera camera;
         camera.camera_id_ = i;
@@ -291,6 +273,34 @@ void GaussianMapper::run()
             camera.gaus_pyramid_width_[l] = camera.width_ * kf_gaus_pyramid_factors_[l];
             camera.gaus_pyramid_height_[l] = camera.height_ * kf_gaus_pyramid_factors_[l];
         }
+        camera.params_[0] = dataloader_ptr_->dataparser_ptr_->P(0, 0);
+        camera.params_[1] = dataloader_ptr_->dataparser_ptr_->P(1, 1);
+        camera.params_[2] = dataloader_ptr_->dataparser_ptr_->P(0, 2);
+        camera.params_[3] = dataloader_ptr_->dataparser_ptr_->P(1, 2);
+
+        cv::Mat K = (cv::Mat_<float>(3, 3) << camera.params_[0], 0.f, camera.params_[2],
+                     0.f, camera.params_[1], camera.params_[3],
+                     0.f, 0.f, 1.f);
+        camera.initUndistortRectifyMapAndMask(K, cv::Size(camera.width_, camera.height_), K, true);
+        this->undistort_mask_[camera.camera_id_] =
+            tensor_utils::cvMat2TorchTensor_Float32(
+                camera.undistort_mask, this->device_type_);
+
+        cv::Mat viewer_main_undistort_mask;
+        int viewer_image_height_main_ = camera.height_ * this->rendered_image_viewer_scale_main_;
+        int viewer_image_width_main_ = camera.width_ * this->rendered_image_viewer_scale_main_;
+        cv::resize(camera.undistort_mask, viewer_main_undistort_mask,
+                   cv::Size(viewer_image_width_main_, viewer_image_height_main_));
+        this->viewer_main_undistort_mask_[camera.camera_id_] =
+            tensor_utils::cvMat2TorchTensor_Float32(
+                viewer_main_undistort_mask, this->device_type_);
+
+        if (!this->viewer_camera_id_set_)
+        {
+            this->viewer_camera_id_ = camera.camera_id_;
+            this->viewer_camera_id_set_ = true;
+        }
+
         scene_->addCamera(camera);
 
         // Create a new keyframe
@@ -299,9 +309,8 @@ void GaussianMapper::run()
         new_kf->znear_ = z_near_;
         // Camera &camera = scene_->cameras_.at(i);
         new_kf->setCameraParams(camera); // 设置相机参数
-        new_kf->setPose(cam_pose); // 设置位姿
-        cv::cvtColor(image, image, CV_BGR2RGB);
-        image.convertTo(image, CV_32FC3, 1.0f / 255.0f);
+        new_kf->setPose(cam_pose);       // 设置位姿
+        this->position_ = new_kf->t_;
         new_kf->original_image_ = tensor_utils::cvMat2TorchTensor_Float32(image, device_type_);
         new_kf->img_filename_ = std::to_string(i);
         new_kf->gaus_pyramid_height_ = camera.gaus_pyramid_height_;
@@ -344,20 +353,23 @@ void GaussianMapper::run()
         {
             std::unique_lock<std::mutex> lock_render(mutex_render_);
             scene_->cameras_extent_ = std::get<1>(scene_->getNerfppNorm());
-            gaussians_->createFromPcd(scene_->cached_point_cloud_, scene_->cameras_extent_); // 从缓存点云中创建gaussians
+            gaussians_->createFromPcd(point_cloud, color, scene_->cameras_extent_); // 从缓存点云中创建gaussians
             std::unique_lock<std::mutex> lock(mutex_settings_);
             gaussians_->trainingSetup(opt_params_);
+            this->initial_mapped_ = true;
         }
 
         // Invoke training once
-        trainForOneIteration();
+        for (int i = 0; i < 6; ++i)
+        {
+            trainForOneIteration();
+        }
     }
 
     // Save and clear
     // renderAndRecordAllKeyframes("_shutdown");
     // savePly(result_dir_ / (std::to_string(getIteration()) + "_shutdown") / "ply");
     // writeKeyframeUsedTimes(result_dir_ / "used_times", "final");
-
     // signalStop();
 }
 
@@ -399,6 +411,7 @@ void GaussianMapper::trainColmap()
     {
         std::unique_lock<std::mutex> lock_render(mutex_render_);
         scene_->cameras_extent_ = std::get<1>(scene_->getNerfppNorm());
+        // std::cout<<"cameras_extent: "<<scene_->cameras_extent_<<std::endl;
         gaussians_->createFromPcd(scene_->cached_point_cloud_, scene_->cameras_extent_);
         std::unique_lock<std::mutex> lock(mutex_settings_);
         gaussians_->trainingSetup(opt_params_);
@@ -486,9 +499,7 @@ void GaussianMapper::trainForOneIteration()
     // else
     gaussians_->setShDegree(default_sh_);
 
-    // Update learning rate
-    // 更新学习率
-
+    // Update learning rate 更新学习率
     gaussians_->updateLearningRate(getIteration());
     gaussians_->setFeatureLearningRate(featureLearningRate());
     gaussians_->setOpacityLearningRate(opacityLearningRate());
@@ -505,14 +516,20 @@ void GaussianMapper::trainForOneIteration()
         background_,
         override_color_);
     auto rendered_image = std::get<0>(render_pkg);
+
+    // 用于调试
+    // cv::Mat rendered_image_mat = tensor_utils::torchTensor2CvMat_Float32(rendered_image);
+    // cv::imshow("rendered_image", rendered_image_mat);
+    // cv::Mat gt_image_mat = tensor_utils::torchTensor2CvMat_Float32(gt_image);
+    // cv::imshow("gt_image", gt_image_mat);
+    // cv::waitKey(1);
+
     auto viewspace_point_tensor = std::get<1>(render_pkg);
     auto visibility_filter = std::get<2>(render_pkg);
     auto radii = std::get<3>(render_pkg);
 
     // Get rid of black edges caused by undistortion
-    // torch::Tensor masked_image = rendered_image * mask; 
-    torch::Tensor masked_image = rendered_image;   // Need be undistorted in the render function !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+    torch::Tensor masked_image = rendered_image * mask;
     // Loss 计算损失
     auto Ll1 = loss_utils::l1_loss(masked_image, gt_image);
     // std::cout << "Ll1: " << Ll1.item().toFloat() << std::endl;

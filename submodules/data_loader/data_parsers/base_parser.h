@@ -54,8 +54,8 @@ struct DataParser {
   std::filesystem::path pose_path_, calib_path_, color_path_, depth_path_;
 
   std::filesystem::path eval_pose_path_, eval_color_path_, eval_depth_path_;
-  Eigen::Matrix<double, 3, 4> P;
-  Eigen::Matrix<double, 4, 4> Tr;
+  Eigen::Matrix<float, 3, 4> P;
+  Eigen::Matrix<float, 4, 4> Tr;
   torch::Device device_ = torch::kCPU;
   torch::Tensor train_color_;     // [N, H, W, 3]
   DepthSamples train_depth_pack_; // [N]

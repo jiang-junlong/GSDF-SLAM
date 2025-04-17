@@ -70,10 +70,6 @@ int main(int argc, char **argv)
     // std::filesystem::path gaussian_cfg_path(argv[1]);
     std::shared_ptr<GaussianMapper> pGausMapper = std::make_shared<GaussianMapper>(dataset_path, gaussian_cfg_path, output_dir, 0, device_type);
     std::thread training_thd(&GaussianMapper::run, pGausMapper.get());
-   
-
-    // Read the colmap scene
-    pGausMapper->setSensorType(MONOCULAR);
 
     // Create Gaussian Viewer
     std::thread viewer_thd;

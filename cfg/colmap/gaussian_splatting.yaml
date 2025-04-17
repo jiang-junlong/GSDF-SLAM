@@ -14,7 +14,7 @@ Model.eval: 0  # 0:false, 1 or other integer:true
 #--------------------------------------------------------------------------------------------
 
 Camera.z_near: 0.01
-Camera.z_far: 100.0
+Camera.z_far: 200.0
 Monocular.inactive_geo_densify_max_pixel_dist: 0.0 # NOT used
 Stereo.min_disparity: 0 # NOT used
 Stereo.num_disparity: 0 # NOT used

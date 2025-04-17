@@ -59,19 +59,19 @@ namespace dataparser
         std::string tag;
         ss >> tag;
 
-        std::vector<double> values((std::istream_iterator<double>(ss)), std::istream_iterator<double>()); // 读取一行数据
+        std::vector<float> values((std::istream_iterator<float>(ss)), std::istream_iterator<float>()); // 读取一行数据
 
         if (values.size() != 12)
           continue;
 
         if (tag == "Tr:")
         {
-          Tr = Eigen::Matrix<double, 4, 4>::Identity();
-          Tr.block<3, 4>(0, 0) = Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>>(values.data());
+          Tr = Eigen::Matrix<float, 4, 4>::Identity();
+          Tr.block<3, 4>(0, 0) = Eigen::Map<Eigen::Matrix<float, 3, 4, Eigen::RowMajor>>(values.data());
         }
         else
         {
-          Eigen::Matrix<double, 3, 4> mat = Eigen::Map<Eigen::Matrix<double, 3, 4, Eigen::RowMajor>>(values.data());
+          Eigen::Matrix<float, 3, 4> mat = Eigen::Map<Eigen::Matrix<float, 3, 4, Eigen::RowMajor>>(values.data());
           if (tag == "P0:")
             continue;
           else if (tag == "P1:")

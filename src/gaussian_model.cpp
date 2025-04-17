@@ -113,6 +113,65 @@ void GaussianModel::setShDegree(const int sh)
 
 // 从稀疏点云中初始化高斯基元
 void GaussianModel::createFromPcd(
+    torch::Tensor &point_cloud,
+    torch::Tensor &color,
+    const float spatial_lr_scale)
+{
+    this->spatial_lr_scale_ = spatial_lr_scale;
+    torch::Tensor fused_color = sh_utils::RGB2SH(color);   // 将颜色张量转换为球谐系数张量feature
+    auto temp = this->max_sh_degree_ + 1;
+    torch::Tensor features = torch::zeros(
+        {fused_color.size(0), 3, temp * temp},
+        torch::TensorOptions().dtype(torch::kFloat).device(device_type_));
+    features.index(
+        {torch::indexing::Slice(),
+         torch::indexing::Slice(0, 3),
+         0}) = fused_color;
+    features.index(
+        {torch::indexing::Slice(),
+         torch::indexing::Slice(3, features.size(1)),
+         torch::indexing::Slice(1, features.size(2))}) = 0.0f;
+
+    torch::Tensor point_cloud_copy = point_cloud.clone();
+    torch::Tensor dist2 = torch::clamp_min(distCUDA2(point_cloud_copy), 0.0000001);
+    torch::Tensor scales = torch::log(torch::sqrt(dist2));
+    auto scales_ndimension = scales.ndimension();
+    scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
+    torch::Tensor rots = torch::zeros({point_cloud.size(0), 4}, torch::TensorOptions().device(device_type_));
+    rots.index({torch::indexing::Slice(), 0}) = 1;
+
+    torch::Tensor opacities = general_utils::inverse_sigmoid(
+        0.1f * torch::ones({point_cloud.size(0), 1}, torch::TensorOptions().dtype(torch::kFloat).device(device_type_)));
+
+    this->exist_since_iter_ = torch::zeros(
+        {point_cloud.size(0)},
+        torch::TensorOptions().dtype(torch::kInt32).device(device_type_));
+
+    this->xyz_ = point_cloud.requires_grad_();
+    this->features_dc_ = features.index({torch::indexing::Slice(),
+                                         torch::indexing::Slice(),
+                                         torch::indexing::Slice(0, 1)})
+                             .transpose(1, 2)
+                             .contiguous()
+                             .requires_grad_();
+    this->features_rest_ = features.index({torch::indexing::Slice(),
+                                           torch::indexing::Slice(),
+                                           torch::indexing::Slice(1, features.size(2))})
+                               .transpose(1, 2)
+                               .contiguous()
+                               .requires_grad_();
+    this->scaling_ = scales.requires_grad_();
+    this->rotation_ = rots.requires_grad_();
+    this->opacity_ = opacities.requires_grad_();
+    
+    GAUSSIAN_MODEL_TENSORS_TO_VEC
+
+    this->max_radii2D_ = torch::zeros({this->getXYZ().size(0)}, torch::TensorOptions().device(device_type_));  // 初始化高斯半径
+}
+
+// 从稀疏点云中初始化高斯基元
+// Photo-SLAM中使用的函数
+void GaussianModel::createFromPcd(
     std::map<point3D_id_t, Point3D> pcd,
     const float spatial_lr_scale)
 {

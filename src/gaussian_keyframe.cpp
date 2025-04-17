@@ -42,8 +42,8 @@ void GaussianKeyframe::setPose(
 }
 
 void GaussianKeyframe::setPose(
-    const Eigen::Quaterniond& q,
-    const Eigen::Vector3d& t)
+    const Eigen::Quaterniond &q,
+    const Eigen::Vector3d &t)
 {
     this->R_quaternion_ = q;
     this->R_quaternion_.normalize();
@@ -54,60 +54,25 @@ void GaussianKeyframe::setPose(
     this->set_pose_ = true;
 }
 
-// void GaussianKeyframe::setPose(const torch::Tensor& Tcw) {
-//     // 保证 Tensor 在 CPU 上并且是连续的
-//     const auto Tcw_contig = Tcw.cpu().contiguous();
-
-//     // 构造 Eigen::Matrix4f（行主存储，确保兼容 Torch 内存布局）
-//     Eigen::Matrix<float, 4, 4, Eigen::RowMajor> Tcw_float;
-//     std::memcpy(Tcw_float.data(), Tcw_contig.data_ptr<float>(), sizeof(float) * 16);
-
-//     // 转为 double 精度，并构造 Sophus::SE3d
-//     Eigen::Matrix4d Tcw_double = Tcw_float.cast<double>();
-//     this->Tcw_ = Sophus::SE3d(Tcw_double);
-
-//     // 提取旋转和平移
-//     this->R_quaternion_ = this->Tcw_.unit_quaternion();
-//     this->t_ = this->Tcw_.translation();
-
-//     // 状态标记
-//     this->set_pose_ = true;
-// }
-void GaussianKeyframe::setPose(const torch::Tensor& Tcw) {
+void GaussianKeyframe::setPose(const torch::Tensor &Tcw)
+{
     // 确保 Tcw 是 float32 类型、在 CPU 上、并且是连续的
     TORCH_CHECK(Tcw.dtype() == torch::kFloat32, "Tcw tensor must be float32.");
     TORCH_CHECK(Tcw.dim() == 2 && Tcw.size(0) == 4 && Tcw.size(1) == 4, "Tcw must be a 4x4 tensor.");
 
     const auto Tcw_contig = Tcw.cpu().contiguous();
-
-    // 转为 Eigen::Matrix4f (RowMajor)
-    Eigen::Matrix<float, 4, 4, Eigen::RowMajor> Tcw_float;
-    std::memcpy(Tcw_float.data(), Tcw_contig.data_ptr<float>(), sizeof(float) * 16);
-
-    // 转为 double
-    Eigen::Matrix4d Tcw_double = Tcw_float.cast<double>();
-
-    // 提取旋转和平移
-    Eigen::Matrix3d R = Tcw_double.block<3,3>(0,0);
-    Eigen::Vector3d t = Tcw_double.block<3,1>(0,3);
-
-    // 用 SVD 强制正交化 R
-    Eigen::JacobiSVD<Eigen::Matrix3d> svd(R, Eigen::ComputeFullU | Eigen::ComputeFullV);
-    R = svd.matrixU() * svd.matrixV().transpose();
-
-    // 防止反射：保证 det(R) = +1（否则是旋转加翻转）
-    if (R.determinant() < 0) {
-        R.col(2) *= -1.0;
-    }
-
-    // 构造 SE3d
-    this->Tcw_ = Sophus::SE3d(R, t);
-    this->R_quaternion_ = this->Tcw_.unit_quaternion();
-    this->t_ = this->Tcw_.translation();
+    torch::Tensor quat = utils::rot_to_quat(Tcw_contig);
+    this->R_quaternion_.w() = quat[0].item<float>();
+    this->R_quaternion_.x() = quat[1].item<float>();
+    this->R_quaternion_.y() = quat[2].item<float>();
+    this->R_quaternion_.z() = quat[3].item<float>();
+    this->R_quaternion_.normalize();
+    this->t_.x() = Tcw_contig[0][3].item<float>();
+    this->t_.y() = Tcw_contig[1][3].item<float>();
+    this->t_.z() = Tcw_contig[2][3].item<float>();
+    this->Tcw_ = Sophus::SE3d(this->R_quaternion_, this->t_);
     this->set_pose_ = true;
 }
-
-
 
 Sophus::SE3d GaussianKeyframe::getPose()
 {
@@ -119,7 +84,7 @@ Sophus::SE3f GaussianKeyframe::getPosef()
     return this->Tcw_.cast<float>();
 }
 
-void GaussianKeyframe::setCameraParams(const Camera& camera)
+void GaussianKeyframe::setCameraParams(const Camera &camera)
 {
     this->camera_id_ = camera.camera_id_;
     this->camera_model_id_ = camera.model_id_;
@@ -154,12 +119,13 @@ void GaussianKeyframe::setCameraParams(const Camera& camera)
     }
 }
 
-void GaussianKeyframe::setPoints2D(const std::vector<Eigen::Vector2d>& points2D)
+void GaussianKeyframe::setPoints2D(const std::vector<Eigen::Vector2d> &points2D)
 {
     this->points2D_.clear();
     auto num_points2D = points2D.size();
     this->points2D_.resize(num_points2D);
-    for (point2D_idx_t point2D_idx = 0; point2D_idx < num_points2D; ++point2D_idx) {
+    for (point2D_idx_t point2D_idx = 0; point2D_idx < num_points2D; ++point2D_idx)
+    {
         points2D_[point2D_idx].xy_ = points2D[point2D_idx];
     }
 }
@@ -173,42 +139,48 @@ void GaussianKeyframe::setPoint3DIdxForPoint2D(
 
 void GaussianKeyframe::computeTransformTensors()
 {
-    if (this->set_pose_ && this->set_camera_) {
+    if (this->set_pose_ && this->set_camera_)
+    {
         this->world_view_transform_ = tensor_utils::EigenMatrix2TorchTensor(
-            this->getWorld2View2(this->trans_, this->scale_),
-            torch::kCUDA
-        ).transpose(0, 1);
+                                          this->getWorld2View2(this->trans_, this->scale_),
+                                          torch::kCUDA)
+                                          .transpose(0, 1);
 
-        if (!this->set_projection_matrix_) {
+        if (!this->set_projection_matrix_)
+        {
             this->projection_matrix_ = this->getProjectionMatrix(
-                this->znear_,
-                this->zfar_,
-                this->FoVx_,
-                this->FoVy_,
-                torch::kCUDA
-            ).transpose(0, 1);
+                                               this->znear_,
+                                               this->zfar_,
+                                               this->FoVx_,
+                                               this->FoVy_,
+                                               torch::kCUDA)
+                                           .transpose(0, 1);
             this->set_projection_matrix_ = true;
         }
 
         this->full_proj_transform_ = (this->world_view_transform_.unsqueeze(0).bmm(
-            this->projection_matrix_.unsqueeze(0))).squeeze(0);
+                                          this->projection_matrix_.unsqueeze(0)))
+                                         .squeeze(0);
 
         this->camera_center_ = this->world_view_transform_.inverse().index({3, torch::indexing::Slice(0, 3)});
     }
-    else if (!this->set_pose_ && this->set_camera_) {
+    else if (!this->set_pose_ && this->set_camera_)
+    {
         std::cerr << "Could not compute transform tensors for keyframe " << this->fid_ << " because POSE is not set!" << std::endl;
     }
-    else if (!this->set_camera_) {
+    else if (!this->set_camera_)
+    {
         std::cerr << "Could not compute transform tensors for keyframe " << this->fid_ << " because CAMERA is not set!" << std::endl;
     }
-    else {
+    else
+    {
         std::cerr << "Could not compute transform tensors for keyframe " << this->fid_ << " because POSE and CAMERA are not set!" << std::endl;
     }
 }
 
 Eigen::Matrix4f
 GaussianKeyframe::getWorld2View2(
-    const Eigen::Vector3f& trans,
+    const Eigen::Vector3f &trans,
     float scale)
 {
     Eigen::Matrix4f Rt;
@@ -260,8 +232,10 @@ GaussianKeyframe::getProjectionMatrix(
 
 int GaussianKeyframe::getCurrentGausPyramidLevel()
 {
-    for (int i = 0; i < gaus_pyramid_times_of_use_.size(); ++i) {
-        if (gaus_pyramid_times_of_use_[i]) {
+    for (int i = 0; i < gaus_pyramid_times_of_use_.size(); ++i)
+    {
+        if (gaus_pyramid_times_of_use_[i])
+        {
             --gaus_pyramid_times_of_use_[i];
             return i;
         }
