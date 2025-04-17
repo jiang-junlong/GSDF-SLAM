@@ -3,15 +3,13 @@ project(photo-slam LANGUAGES CXX CUDA)
 
 option(ENABLE_ROS "Enable ROS support" OFF)
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug)
-    # set(CMAKE_BUILD_TYPE Release)
+    # set(CMAKE_BUILD_TYPE Debug)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CUDA_STANDARD 17)
-
-set(Torch_DIR /home/uav/envs/libtorch/share/cmake/Torch)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 
@@ -19,26 +17,18 @@ set(CAFFE2_USE_CUDNN on)
 
 # Uncomment the following line if you want to solve CMake Warning "Failed to compute shorthash for libnvrtc.so"
 # set(PYTHON_EXECUTABLE "/usr/bin/python3")
-
+set(ENV{CUDA_LAUNCH_BLOCKING} 1)
 find_package(Torch REQUIRED)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS} -pthread")
-
-# set(ENV{CUDA_LAUNCH_BLOCKING} 1)
-# set(ENV{TORCH_USE_CUDA_DSA} 1)
-
 find_package(CUDA REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV 4 REQUIRED)
-message(STATUS "OpenCV include dirs: ${OpenCV_INCLUDE_DIRS}")
-message(STATUS "OpenCV libs: ${OpenCV_LIBS}")
-
 find_package(jsoncpp REQUIRED)
 
 find_package(OpenGL REQUIRED)
 find_package(glm REQUIRED)
 find_package(glfw3 REQUIRED)
 
-find_package(realsense2)
+# find_package(realsense2)
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE INTERNAL "No dev warnings") # 关闭pcl烦人的警告
 find_package(PCL REQUIRED)
 
@@ -149,7 +139,6 @@ add_library(gaussian_mapper SHARED
     src/gaussian_trainer.cpp
     src/gaussian_mapper.cpp)
 target_link_libraries(gaussian_mapper
-    # ${ORB_SLAM3_SOURCE_DIR}/lib/libORB_SLAM3.so
     ${OpenCV_LIBRARIES}
     jsoncpp_lib
     "${TORCH_LIBRARIES}"
@@ -199,22 +188,59 @@ target_link_libraries(ray_utils ${TORCH_LIBRARIES})
 add_library(data_loader submodules/data_loader/data_loader.cpp
                         submodules/utils/coordinates.cpp
                         )
-target_link_libraries(data_loader data_parser ray_utils)
+target_link_libraries(data_loader data_parser ray_utils colorize_pointcloud)
+
+
+##################################################################################
+##  toolbox
+##################################################################################
+
+add_library(colorize_pointcloud SHARED
+    cuda_colorize/colorize_pointcloud.h
+    cuda_colorize/colorize_pointcloud.cu
+)
+
+set_target_properties(colorize_pointcloud PROPERTIES CUDA_ARCHITECTURES "75;86")
+
+target_include_directories(colorize_pointcloud PRIVATE
+    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(colorize_pointcloud
+    "${TORCH_LIBRARIES}"
+    "${CUDA_LIBRARIES}"
+)
+
+
+# add_executable(color_point_cloud color_point_cloud.cpp)
+
+# target_link_libraries(color_point_cloud
+#     ${OpenCV_LIBRARIES}
+#     ${PCL_LIBRARIES}
+#     "${TORCH_LIBRARIES}"
+#     Eigen3::Eigen
+#     glm::glm
+#     glfw
+#     OpenGL::GL
+# )
+
 
 
 ##################################################################################
 ##  Build the test examples to ${PROJECT_SOURCE_DIR}/bin
 ##################################################################################
-
+find_package(Threads REQUIRED)
 # This is a C++ libtorch implementation of gaussian-splatting (https://github.com/graphdeco-inria/gaussian-splatting)
 add_executable(train_colmap demo/train_colmap.cpp)
 target_link_libraries(train_colmap
     gaussian_viewer
     gaussian_mapper
     data_loader
+    Threads::Threads
     )
 
-# add_executable(view_result examples/view_result.cpp)
+# add_executable(view_result demo/view_result.cpp)
 # target_link_libraries(view_result
 #     gaussian_viewer
 #     gaussian_mapper)
@@ -224,22 +250,13 @@ target_link_libraries(train_kitti
         gaussian_viewer
         gaussian_mapper
         data_loader
+        colorize_pointcloud
+        Threads::Threads
         )
 
-
-
-##################################################################################
-##  toolbox
-##################################################################################
-
-add_executable(color_point_cloud color_point_cloud.cpp)
-
-target_link_libraries(color_point_cloud
-    ${OpenCV_LIBRARIES}
-    ${PCL_LIBRARIES}
-    "${TORCH_LIBRARIES}"
-    Eigen3::Eigen
-    glm::glm
-    glfw
-    OpenGL::GL
-)
+add_executable(test_dataloader demo/test_dataloader.cpp)
+target_link_libraries(test_dataloader
+        gaussian_viewer
+        gaussian_mapper
+        data_loader
+        )

@@ -99,7 +99,7 @@ protected:
     float keyboard_anglular_velocity_ = 0.05;
 
     bool reset_main_to_init_ = false;
-    bool tracking_vision_ = false;
+    bool tracking_vision_ = true;
     bool show_keyframes_ = false;
     bool show_sparse_mappoints_ = false;
     bool show_main_rendered_ = true;

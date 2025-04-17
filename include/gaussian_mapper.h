@@ -214,6 +214,7 @@ protected:
     void writeKeyframeUsedTimes(std::filesystem::path result_dir, std::string name_suffix = "");
 
 public:
+    Eigen::Vector3d position_;
     // Parameters
     std::filesystem::path config_file_path_;
 
@@ -232,7 +233,8 @@ public:
     float rendered_image_viewer_scale_main_ = 1.0f;
 
     float z_near_ = 0.01f;
-    float z_far_ = 100.0f;
+    // float z_far_ = 100.0f;
+    float z_far_ = 500.0f;
 
     // Data
     bool kfid_shuffled_ = false;

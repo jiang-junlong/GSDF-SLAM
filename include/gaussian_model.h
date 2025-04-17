@@ -3,11 +3,11 @@
  * GRAPHDECO research group, https://team.inria.fr/graphdeco
  * All rights reserved.
  *
- * This software is free for non-commercial, research and evaluation use 
+ * This software is free for non-commercial, research and evaluation use
  * under the terms of the LICENSE.md file.
  *
  * For inquiries contact  george.drettakis@inria.fr
- * 
+ *
  * This file is Derivative Works of Gaussian Splatting,
  * created by Longwei Li, Huajian Huang, Hui Cheng and Sai-Kit Yeung in 2023,
  * as part of Photo-SLAM.
@@ -59,7 +59,7 @@ class GaussianModel
 {
 public:
     GaussianModel(const int sh_degree);
-    GaussianModel(const GaussianModelParams& model_params);
+    GaussianModel(const GaussianModelParams &model_params);
 
     torch::Tensor getScalingActivation();
     torch::Tensor getRotationActivation();
@@ -75,27 +75,32 @@ public:
         std::map<point3D_id_t, Point3D> pcd,
         const float spatial_lr_scale);
 
+    void createFromPcd(
+        torch::Tensor &fused_point_cloud,
+        torch::Tensor &color,
+        const float spatial_lr_scale);
+
     void increasePcd(std::vector<float> points, std::vector<float> colors, const int iteration);
-    void increasePcd(torch::Tensor& new_point_cloud, torch::Tensor& new_colors, const int iteration);
+    void increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &new_colors, const int iteration);
 
     void applyScaledTransformation(
         const float s = 1.0,
         const Sophus::SE3f T = Sophus::SE3f(Eigen::Matrix3f::Identity(), Eigen::Vector3f::Zero()));
     void scaledTransformationPostfix(
-        torch::Tensor& new_xyz,
-        torch::Tensor& new_scaling);
+        torch::Tensor &new_xyz,
+        torch::Tensor &new_scaling);
 
     void scaledTransformVisiblePointsOfKeyframe(
-        torch::Tensor& point_not_transformed_flags,
-        torch::Tensor& diff_pose,
-        torch::Tensor& kf_world_view_transform,
-        torch::Tensor& kf_full_proj_transform,
+        torch::Tensor &point_not_transformed_flags,
+        torch::Tensor &diff_pose,
+        torch::Tensor &kf_world_view_transform,
+        torch::Tensor &kf_full_proj_transform,
         const int kf_creation_iter,
         const int stable_num_iter_existence,
-        int& num_transformed,
+        int &num_transformed,
         const float scale = 1.0f);
 
-    void trainingSetup(const GaussianOptimizationParams& training_args);
+    void trainingSetup(const GaussianOptimizationParams &training_args);
     float updateLearningRate(int step);
     void setPositionLearningRate(float position_lr);
     void setFeatureLearningRate(float feature_lr);
@@ -104,27 +109,27 @@ public:
     void setRotationLearningRate(float rot_lr);
 
     void resetOpacity();
-    torch::Tensor replaceTensorToOptimizer(torch::Tensor& t, int tensor_idx);
+    torch::Tensor replaceTensorToOptimizer(torch::Tensor &t, int tensor_idx);
 
-    void prunePoints(torch::Tensor& mask);
+    void prunePoints(torch::Tensor &mask);
 
     void densificationPostfix(
-        torch::Tensor& new_xyz,
-        torch::Tensor& new_features_dc,
-        torch::Tensor& new_features_rest,
-        torch::Tensor& new_opacities,
-        torch::Tensor& new_scaling,
-        torch::Tensor& new_rotation,
-        torch::Tensor& new_exist_since_iter);
+        torch::Tensor &new_xyz,
+        torch::Tensor &new_features_dc,
+        torch::Tensor &new_features_rest,
+        torch::Tensor &new_opacities,
+        torch::Tensor &new_scaling,
+        torch::Tensor &new_rotation,
+        torch::Tensor &new_exist_since_iter);
 
     void densifyAndSplit(
-        torch::Tensor& grads,
+        torch::Tensor &grads,
         float grad_threshold,
         float scene_extent,
         int N = 2);
 
     void densifyAndClone(
-        torch::Tensor& grads,
+        torch::Tensor &grads,
         float grad_threshold,
         float scene_extent);
 
@@ -135,11 +140,11 @@ public:
         int max_screen_size);
 
     void addDensificationStats(
-        torch::Tensor& viewspace_point_tensor,
-        torch::Tensor& update_filter);
+        torch::Tensor &viewspace_point_tensor,
+        torch::Tensor &update_filter);
 
-// void increasePointsIterationsOfExistence(const int i = 1);
-    
+    // void increasePointsIterationsOfExistence(const int i = 1);
+
     void loadPly(std::filesystem::path ply_path);
     void savePly(std::filesystem::path result_path);
     void saveSparsePointsPly(std::filesystem::path result_path);
@@ -168,11 +173,11 @@ public:
     torch::Tensor exist_since_iter_;
 
     std::vector<torch::Tensor> Tensor_vec_xyz_,
-                               Tensor_vec_feature_dc_,
-                               Tensor_vec_feature_rest_,
-                               Tensor_vec_opacity_,
-                               Tensor_vec_scaling_ ,
-                               Tensor_vec_rotation_;
+        Tensor_vec_feature_dc_,
+        Tensor_vec_feature_rest_,
+        Tensor_vec_opacity_,
+        Tensor_vec_scaling_,
+        Tensor_vec_rotation_;
 
     std::shared_ptr<torch::optim::Adam> optimizer_;
     float percent_dense_;

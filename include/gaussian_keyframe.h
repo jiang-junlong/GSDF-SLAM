@@ -30,6 +30,7 @@
 #include "graphics_utils.h"
 #include "tensor_utils.h"
 #include "submodules/Sophus/sophus/se3.hpp"
+#include "submodules/utils/utils.h"
 
 // 关键帧
 class GaussianKeyframe
@@ -53,7 +54,7 @@ public:
         const Eigen::Quaterniond& q,
         const Eigen::Vector3d& t);
     
-    void setPose(const torch::Tensor& Tcw);
+    void setPose(const torch::Tensor& Tcw); // 4x4
 
     Sophus::SE3d getPose();
     Sophus::SE3f getPosef();

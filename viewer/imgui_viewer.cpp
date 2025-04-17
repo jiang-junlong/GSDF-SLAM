@@ -18,7 +18,7 @@
 
 #include "imgui_viewer.h"
 
-static void glfw_error_callback(int error, const char* description)
+static void glfw_error_callback(int error, const char *description)
 {
     fprintf(stderr, "[ImGuiViewer]GLFW Error %d: %s\n", error, description);
 }
@@ -38,18 +38,23 @@ ImGuiViewer::ImGuiViewer(
     this->pGausMapper_ = pGausMapper;
 
     cv::Size im_size;
- 
-    image_height_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.height;
-    image_width_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.width;
-    viewpointF_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fy;
-    main_fx_= pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fx;
-    main_fy_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fy;
-
-    // image_height_ = pGausMapper->scene_->cameras_.begin()->second.height_;
-    // image_width_ = pGausMapper->scene_->cameras_.begin()->second.width_;
-    // viewpointF_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
-    // main_fx_ = pGausMapper->scene_->cameras_.begin()->second.params_[0];
-    // main_fy_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
+    if (pGausMapper->dataloader_ptr_ != nullptr)
+    {
+        image_height_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.height;
+        image_width_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.width;
+        viewpointF_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fy;
+        main_fx_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fx;
+        main_fy_ = pGausMapper->dataloader_ptr_->dataparser_ptr_->sensor_.camera.fy;
+    }
+    else
+    {
+        image_height_ = pGausMapper->scene_->cameras_.begin()->second.height_;
+        image_width_ = pGausMapper->scene_->cameras_.begin()->second.width_;
+        viewpointF_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
+        main_fx_ = pGausMapper->scene_->cameras_.begin()->second.params_[0];
+        main_fy_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
+    }
+    // std::cout << "[ImGuiViewer]Image size: " << main_fx_ << "x" << main_fy_ << std::endl;
 
     // Gaussian Mapper settings
     std::filesystem::path cfg_file_path = pGausMapper->config_file_path_;
@@ -67,14 +72,13 @@ ImGuiViewer::ImGuiViewer(
     cam_target_ = glm::vec3(0.0f, 0.0f, 0.0f);
     cam_view_ = glm::lookAt(cam_pos_, cam_target_, up_);
     cam_trans_ = cam_proj_ * cam_view_;
-
 }
 
 void ImGuiViewer::readConfigFromFile(std::filesystem::path cfg_path)
 {
     cv::FileStorage settings_file(cfg_path.string().c_str(), cv::FileStorage::READ);
-    if(!settings_file.isOpened())
-       throw std::runtime_error("[ImGuiViewer]Failed to open settings file at: " + cfg_path.string());
+    if (!settings_file.isOpened())
+        throw std::runtime_error("[ImGuiViewer]Failed to open settings file at: " + cfg_path.string());
     std::cout << "[ImGuiViewer]Reading parameters from " << cfg_path << std::endl;
 
     glfw_window_width_ =
@@ -98,7 +102,7 @@ void ImGuiViewer::readConfigFromFile(std::filesystem::path cfg_path)
     rendered_image_width_main_ = image_width_ * rendered_image_viewer_scale_main_;
 
     temp = rendered_image_width_main_ % 4;
-    padded_main_image_width_ = rendered_image_width_main_ + 4 - (temp == 0 ? 4 : temp); 
+    padded_main_image_width_ = rendered_image_width_main_ + 4 - (temp == 0 ? 4 : temp);
 
     camera_watch_dist_ =
         settings_file["GaussianViewer.camera_watch_dist"].operator float();
@@ -132,7 +136,7 @@ void ImGuiViewer::run()
         throw std::runtime_error("[ImGuiViewer]Fails to initialize!");
 
     // 设置 GLSL 版本为 130，用于 OpenGL 着色语言的版本兼容
-    const char* glsl_version = "#version 130";
+    const char *glsl_version = "#version 130";
 
     // 配置 OpenGL 版本为 3.0，指定主版本和次版本号
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -140,19 +144,20 @@ void ImGuiViewer::run()
     glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
     // Create window with graphics context
-    GLFWwindow* window = glfwCreateWindow(glfw_window_width_, glfw_window_height_, "SLAM Viewer", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(glfw_window_width_, glfw_window_height_, "SLAM Viewer", nullptr, nullptr);
     if (window == nullptr)
         throw std::runtime_error("[ImGuiViewer]Fails to create window!");
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
+    glfwSwapInterval(1);     // Enable vsync
     glEnable(GL_DEPTH_TEST); // Enable 3D Mouse handler
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;   // Enable Gamepad Controls
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
 
     // Setup Dear ImGui style
     ImGui::StyleColorsClassic();
@@ -207,7 +212,7 @@ void ImGuiViewer::run()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     // Main loop
-    while(!isStopped() && !glfwWindowShouldClose(window))
+    while (!isStopped() && !glfwWindowShouldClose(window))
     {
         //--------------Poll and handle events (inputs, window resize, etc.)--------------
         glfwPollEvents();
@@ -224,7 +229,14 @@ void ImGuiViewer::run()
 
         if (tracking_vision_)
         {
-            glm::vec3 cam_target = glm::vec3(Ow[3][0], Ow[3][1], Ow[3][2]);
+            glm::vec3 cam_target;
+            if (pGausMapper_->dataloader_ptr_ != nullptr)
+            {
+                cam_target = glm::vec3(pGausMapper_->position_[0], pGausMapper_->position_[1], pGausMapper_->position_[2]);
+                // std::cout << "[ImGuiViewer]Cam target: " << cam_target.x << " " << cam_target.y << " " << cam_target.z << std::endl;
+            }
+            else
+                cam_target = glm::vec3(Ow[3][0], Ow[3][1], Ow[3][2]);
             cam_pos_aligned = glmTwc * behind_;
             glm::vec3 cam_pos = glm::vec3(cam_pos_aligned.x, cam_pos_aligned.y, cam_pos_aligned.z);
             cam_direction = cam_pos - cam_target;
@@ -277,15 +289,13 @@ void ImGuiViewer::run()
             auto drawlist = ImGui::GetBackgroundDrawList();
             cv::Mat main_img = pGausMapper_->renderFromPose(
                 Tcw_main_, rendered_image_width_main_, rendered_image_height_main_, true);
-            
             cv::Mat main_img_to_show = cv::Mat(rendered_image_height_main_, padded_main_image_width_, CV_32FC3, cv::Vec3f(0.0f, 0.0f, 0.0f));
             main_img.copyTo(main_img_to_show(image_rect_main));
             glBindTexture(GL_TEXTURE_2D, main_img_texture);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, main_img_to_show.cols, main_img_to_show.rows,
-                    0, GL_RGB, GL_FLOAT, (float*)main_img_to_show.data);
+                         0, GL_RGB, GL_FLOAT, (float *)main_img_to_show.data);
             drawlist->AddImage((void *)(intptr_t)main_img_texture, ImVec2(0, 0),
-                                ImVec2(glfw_window_width_, glfw_window_height_));
-        
+                               ImVec2(glfw_window_width_, glfw_window_height_));
         }
         //--------------Get current parameters--------------
         VariableParameters params_in = pGausMapper_->getVaribleParameters();
@@ -402,7 +412,7 @@ void ImGuiViewer::run()
         glfwSwapBuffers(window);
         glfwPollEvents();
 
-        if (!keep_training_  && pGausMapper_->isStopped())
+        if (!keep_training_ && pGausMapper_->isStopped())
             signalStop();
     }
 
@@ -413,7 +423,6 @@ void ImGuiViewer::run()
 
     glfwDestroyWindow(window);
     glfwTerminate();
-
 
     pGausMapper_->signalStop();
 
