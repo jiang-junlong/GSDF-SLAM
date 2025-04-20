@@ -21,6 +21,4 @@
 #include <cstdint>
 
 // 定义新的类型别名，增加代码的可读性和维护性
-typedef std::uint32_t point2D_idx_t;
-typedef std::uint64_t point3D_id_t;
 typedef std::uint32_t camera_id_t;

@@ -81,7 +81,7 @@ void colorize_launcher(
 
 
     // CUDA内核的线程配置
-    const dim3 threads(1024);
+    const dim3 threads(256);
     const dim3 blocks((N + threads.x - 1) / threads.x);
 
     // 调用CUDA内核进行点云染色和标记有效点

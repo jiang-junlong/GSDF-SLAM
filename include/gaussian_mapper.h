@@ -96,11 +96,7 @@ struct VariableParameters
 class GaussianMapper
 {
 public:
-    GaussianMapper(
-        std::filesystem::path gaussian_config_file_path,
-        std::filesystem::path result_dir = "",
-        int seed = 0,
-        torch::DeviceType device_type = torch::kCUDA);
+
     GaussianMapper(
         std::filesystem::path dataset_path,
         std::filesystem::path gaussian_config_file_path,
@@ -113,6 +109,7 @@ public:
     void run();
     void trainColmap();
     void trainForOneIteration();
+    void trainForOneIteration_ours();
 
     bool isStopped();
     void signalStop(const bool going_to_stop = true);
@@ -183,30 +180,6 @@ protected:
     void increaseKeyframeTimesOfUse(std::shared_ptr<GaussianKeyframe> pkf, int times);
     void increasePcdByKeyframeInactiveGeoDensify(
         std::shared_ptr<GaussianKeyframe> pkf);
-
-    // bool needInterruptTraining();
-    // void setInterruptTraining(const bool interrupt_training);
-
-    void recordKeyframeRendered(
-        torch::Tensor &rendered,
-        torch::Tensor &ground_truth,
-        unsigned long kfid,
-        std::filesystem::path result_img_dir,
-        std::filesystem::path result_gt_dir,
-        std::filesystem::path result_loss_dir,
-        std::string name_suffix = "");
-    void renderAndRecordKeyframe(
-        std::shared_ptr<GaussianKeyframe> pkf,
-        float &dssim,
-        float &psnr,
-        float &psnr_gs,
-        double &render_time,
-        std::filesystem::path result_img_dir,
-        std::filesystem::path result_gt_dir,
-        std::filesystem::path result_loss_dir,
-        std::string name_suffix = "");
-    void renderAndRecordAllKeyframes(
-        std::string name_suffix = "");
 
     void savePly(std::filesystem::path result_dir);
     void keyframesToJson(std::filesystem::path result_dir);

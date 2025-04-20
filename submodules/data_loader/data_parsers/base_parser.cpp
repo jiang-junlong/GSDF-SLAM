@@ -51,7 +51,7 @@ void load_file_list(const std::string &dir_path,
   //   std::cout << name << "\n";
   // }
 
-  std::cout << "Load " << out_filelsits.size() << " data." << "\n";
+  // std::cout << "Load " << out_filelsits.size() << " data." << "\n";
 }
 
 torch::Tensor DataParser::get_pose(const int &idx, const int &pose_type) const {
@@ -424,7 +424,7 @@ std::vector<torch::Tensor> DataParser::load_poses(const std::string &pose_path,
           pose_tensor = torch::eye(4, torch::kFloat); // need new tensor
         }
       }
-      std::cout << "\n";
+      // std::cout << "\n";
     }
   }
   file.close();
@@ -480,7 +480,7 @@ void DataParser::load_colors(const std::string &file_extension,
     } else {
       train_color_num = raw_color_num;
     }
-    std::cout << train_color_num << std::endl;
+    // std::cout << train_color_num << std::endl;
 
     train_color_poses_ = torch::zeros({train_color_num, 3, 4});
     train_color_filelists_.resize(train_color_num);
@@ -514,7 +514,7 @@ void DataParser::load_colors(const std::string &file_extension,
           train_color_.index_put_({i - 1}, color);
         }
       }
-      std::cout << train_color_.sizes() << std::endl;
+      // std::cout << train_color_.sizes() << std::endl;
     }
   } else {
     assert(std::filesystem::exists(eval_color_path_));
@@ -606,7 +606,7 @@ void DataParser::load_depths(const std::string &file_extension,
           train_depth_filelists_[i - 1] = raw_depth_filelists_[i - 1];
         }
       }
-      std::cout << train_depth_pack_.depth.sizes() << '\n';
+      // std::cout << train_depth_pack_.depth.sizes() << '\n';
     }
   } else {
     assert(std::filesystem::exists(eval_depth_path_));

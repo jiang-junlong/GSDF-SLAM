@@ -31,7 +31,7 @@ namespace dataparser
     {
 
       auto T_W_C0 = load_poses(pose_path_, false, 2)[0];                              // 加载位姿
-      std::cout << "T_W_C0: " << T_W_C0 << std::endl;
+      // std::cout << "T_W_C0: " << T_W_C0 << std::endl;
       TORCH_CHECK(T_W_C0.size(0) > 0);
       // auto T_W_C0 = coords::change_world_system(T_C0_C0, coords::SystemType::Kitti);
       color_poses_ = T_W_C0.matmul(T_C0_C2);
@@ -158,11 +158,11 @@ namespace dataparser
       sensor_.camera.height = 370;
       depth_scale_inv_ = 1.0;
       // print out cameras
-      std::cout << "fx: " << sensor_.camera.fx << ", fy: " << sensor_.camera.fy
-                << ", cx: " << sensor_.camera.cx << ", cy: " << sensor_.camera.cy
-                << "\n";
-      std::cout << "T_C0_L:\n"
-                << T_C0_L << "\n";
+      // std::cout << "fx: " << sensor_.camera.fx << ", fy: " << sensor_.camera.fy
+      //           << ", cx: " << sensor_.camera.cx << ", cy: " << sensor_.camera.cy
+      //           << "\n";
+      // std::cout << "T_C0_L:\n"
+      //           << T_C0_L << "\n";
     }
 
     std::vector<at::Tensor> get_distance_ndir_zdirn(const int &idx) override

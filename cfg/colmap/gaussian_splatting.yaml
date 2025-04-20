@@ -32,8 +32,8 @@ Mapper.large_rotation_threshold: 0.0 # NOT used
 Mapper.large_translation_threshold: 0.0 # NOT used
 Mapper.stable_num_iter_existence: 0 # NOT used
 
-GausPyramid.do: 0  # 0:false, 1 or other integer:true
-GausPyramid.num_sub_levels: 2
+GausPyramid.do: 1  # 0:false, 1 or other integer:true
+GausPyramid.num_sub_levels: 3
 GausPyramid.sub_level_times_of_use: 8
 
 Pipeline.convert_SHs: 0  # 0:false, 1 or other integer:true
@@ -65,12 +65,12 @@ Optimization.rotation_lr: 0.001 #0.001
 # Densification
 Optimization.percent_dense: 0.01
 Optimization.lambda_dssim: 0.2
-Optimization.densification_interval: 100
+Optimization.densification_interval: 2
 Optimization.opacity_reset_interval: 3000  # 0:never, 1:always, others:periodically
 Optimization.prune_big_point_after_iter: 30000
 Optimization.densify_min_opacity: 0.005
 Optimization.densify_from_iter: 500
-Optimization.densify_until_iter: 15000
+Optimization.densify_until_iter: 3
 Optimization.densify_grad_threshold: 0.0002
 
 #--------------------------------------------------------------------------------------------

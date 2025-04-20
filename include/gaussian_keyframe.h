@@ -25,7 +25,6 @@
 #include <Eigen/Geometry>
 #include "types.h"
 #include "camera.h"
-#include "point2d.h"
 #include "general_utils.h"
 #include "graphics_utils.h"
 #include "tensor_utils.h"
@@ -49,27 +48,22 @@ public:
         const double tx,
         const double ty,
         const double tz);
-    
+
     void setPose(
-        const Eigen::Quaterniond& q,
-        const Eigen::Vector3d& t);
-    
-    void setPose(const torch::Tensor& Tcw); // 4x4
+        const Eigen::Quaterniond &q,
+        const Eigen::Vector3d &t);
+
+    void setPose(const torch::Tensor &Tcw); // 4x4
 
     Sophus::SE3d getPose();
     Sophus::SE3f getPosef();
 
-    void setCameraParams(const Camera& camera);
-
-    void setPoints2D(const std::vector<Eigen::Vector2d>& points2D);
-    void setPoint3DIdxForPoint2D(
-        const point2D_idx_t point2D_idx,
-        const point3D_id_t point3D_id);
+    void setCameraParams(const Camera &camera);
 
     void computeTransformTensors();
 
     Eigen::Matrix4f getWorld2View2(
-        const Eigen::Vector3f& trans = {0.0f, 0.0f, 0.0f},
+        const Eigen::Vector3f &trans = {0.0f, 0.0f, 0.0f},
         float scale = 1.0f);
 
     torch::Tensor getProjectionMatrix(
@@ -112,9 +106,9 @@ public:
     bool set_pose_ = false;
     bool set_projection_matrix_ = false;
 
-    Eigen::Quaterniond R_quaternion_;  ///< 外参
-    Eigen::Vector3d t_;                ///< 外参
-    Sophus::SE3d Tcw_;                 ///< 外参
+    Eigen::Quaterniond R_quaternion_; ///< 外参
+    Eigen::Vector3d t_;               ///< 外参
+    Sophus::SE3d Tcw_;                ///< 外参
 
     torch::Tensor R_tensor_; ///< 外参
     torch::Tensor t_tensor_; ///< 外参
@@ -125,12 +119,11 @@ public:
     Eigen::Vector3f trans_ = {0.0f, 0.0f, 0.0f};
     float scale_ = 1.0f;
 
-    torch::Tensor world_view_transform_;    ///< transform tensors
-    torch::Tensor projection_matrix_;       ///< transform tensors
-    torch::Tensor full_proj_transform_;     ///< transform tensors
-    torch::Tensor camera_center_;           ///< transform tensors
+    torch::Tensor world_view_transform_; ///< transform tensors
+    torch::Tensor projection_matrix_;    ///< transform tensors
+    torch::Tensor full_proj_transform_;  ///< transform tensors
+    torch::Tensor camera_center_;        ///< transform tensors
 
-    std::vector<Point2D> points2D_;
     std::vector<float> kps_pixel_;
     std::vector<float> kps_point_local_;
 

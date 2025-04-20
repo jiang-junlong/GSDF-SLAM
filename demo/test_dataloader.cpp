@@ -61,7 +61,7 @@ int main(int argc, char** argv)
         }
         cv::imshow("image", image);
         cv::waitKey(1);
-        viewer.spin();  // 更流畅
+        viewer.spinOnce(10);  // 更流畅
         std::this_thread::sleep_for(std::chrono::milliseconds(30));  // 控帧率
     }
     return 0;

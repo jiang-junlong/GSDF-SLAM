@@ -28,7 +28,6 @@
 #include "submodules/simple-knn/spatial.h"
 #include "submodules/tinyply/tinyply.h"
 #include "types.h"
-#include "point3d.h"
 #include "operate_points.h"
 #include "general_utils.h"
 #include "sh_utils.h"
@@ -70,18 +69,14 @@ public:
 
     void oneUpShDegree();
     void setShDegree(const int sh);
-
     void createFromPcd(
-        std::map<point3D_id_t, Point3D> pcd,
-        const float spatial_lr_scale);
-
-    void createFromPcd(
-        torch::Tensor &fused_point_cloud,
+        torch::Tensor &point_cloud,
         torch::Tensor &color,
         const float spatial_lr_scale);
 
     void increasePcd(std::vector<float> points, std::vector<float> colors, const int iteration);
     void increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &new_colors, const int iteration);
+    void increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &new_colors, const int iteration, const float spatial_lr_scale);
 
     void applyScaledTransformation(
         const float s = 1.0,
@@ -161,13 +156,13 @@ public:
     int active_sh_degree_;
     int max_sh_degree_;
 
-    torch::Tensor xyz_;
-    torch::Tensor features_dc_;
-    torch::Tensor features_rest_;
-    torch::Tensor scaling_;
-    torch::Tensor rotation_;
-    torch::Tensor opacity_;
-    torch::Tensor max_radii2D_;
+    torch::Tensor xyz_;                   // 位置
+    torch::Tensor features_dc_;           // 球谐系数（常数颜色部分）
+    torch::Tensor features_rest_;         // 球谐系数（其它颜色部分）
+    torch::Tensor scaling_;               // 缩放
+    torch::Tensor rotation_;              // 旋转
+    torch::Tensor opacity_;               // 不透明度
+    torch::Tensor max_radii2D_;           // 最大半径2D
     torch::Tensor xyz_gradient_accum_;
     torch::Tensor denom_;
     torch::Tensor exist_since_iter_;

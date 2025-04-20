@@ -38,39 +38,8 @@ GaussianRasterizerFunction::forward(
     torch::Tensor rotations,
     torch::Tensor cov3Ds_precomp,
     GaussianRasterizationSettings raster_settings)
-    // torch::Tensor bg,
-    // float scale_modifier,
-    // torch::Tensor viewmatrix,
-    // torch::Tensor projmatrix,
-    // float tan_fovx,
-    // float tan_fovy,
-    // int image_height,
-    // int image_width,
-    // int sh_degree,
-    // torch::Tensor campos,
-    // bool prefiltered)
 {
     // Invoke C++/CUDA rasterizer
-    // auto rasterization_result = RasterizeGaussiansCUDA(
-    //     raster_settings.bg_,
-    //     means3D,
-    //     colors_precomp,
-    //     opacities,
-    //     scales,
-    //     rotations,
-    //     raster_settings.scale_modifier_,
-    //     cov3Ds_precomp,
-    //     raster_settings.viewmatrix_,
-    //     raster_settings.projmatrix_,
-    //     raster_settings.tanfovx_,
-    //     raster_settings.tanfovy_,
-    //     raster_settings.image_height_,
-    //     raster_settings.image_width_,
-    //     sh,
-    //     raster_settings.sh_degree_,
-    //     raster_settings.campos_,
-    //     raster_settings.prefiltered_
-    // );
     auto rasterization_result = RasterizeGaussiansCUDA(
         raster_settings.bg_, 
         means3D, 

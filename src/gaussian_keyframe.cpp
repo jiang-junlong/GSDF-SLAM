@@ -119,24 +119,6 @@ void GaussianKeyframe::setCameraParams(const Camera &camera)
     }
 }
 
-void GaussianKeyframe::setPoints2D(const std::vector<Eigen::Vector2d> &points2D)
-{
-    this->points2D_.clear();
-    auto num_points2D = points2D.size();
-    this->points2D_.resize(num_points2D);
-    for (point2D_idx_t point2D_idx = 0; point2D_idx < num_points2D; ++point2D_idx)
-    {
-        points2D_[point2D_idx].xy_ = points2D[point2D_idx];
-    }
-}
-
-void GaussianKeyframe::setPoint3DIdxForPoint2D(
-    const point2D_idx_t point2D_idx,
-    const point3D_id_t point3D_id)
-{
-    points2D_.at(point2D_idx).point3D_id_ = point3D_id;
-}
-
 void GaussianKeyframe::computeTransformTensors()
 {
     if (this->set_pose_ && this->set_camera_)

@@ -19,7 +19,7 @@
 #include "include/gaussian_scene.h"
 
 GaussianScene::GaussianScene(
-    GaussianModelParams& args,
+    GaussianModelParams &args,
     int load_iteration,
     bool shuffle,
     std::vector<float> resolution_scales)
@@ -31,17 +31,17 @@ GaussianScene::GaussianScene(
     }
 }
 
-void GaussianScene::addCamera(Camera& camera)
+void GaussianScene::addCamera(Camera &camera)
 {
     this->cameras_.emplace(camera.camera_id_, camera);
 }
 
-Camera& GaussianScene::getCamera(camera_id_t cameraId)
+Camera &GaussianScene::getCamera(camera_id_t cameraId)
 {
     return this->cameras_[cameraId];
 }
 
-void GaussianScene::addKeyframe(std::shared_ptr<GaussianKeyframe> new_kf, bool* shuffled)
+void GaussianScene::addKeyframe(std::shared_ptr<GaussianKeyframe> new_kf, bool *shuffled)
 {
     std::unique_lock<std::mutex> lock_kfs(this->mutex_kfs_);
     this->keyframes_.emplace(new_kf->fid_, new_kf);
@@ -58,7 +58,7 @@ GaussianScene::getKeyframe(std::size_t fid)
         return nullptr;
 }
 
-std::map<std::size_t, std::shared_ptr<GaussianKeyframe>>&
+std::map<std::size_t, std::shared_ptr<GaussianKeyframe>> &
 GaussianScene::keyframes()
 {
     return this->keyframes_;
@@ -71,30 +71,13 @@ GaussianScene::getAllKeyframes()
     return this->keyframes_;
 }
 
-void GaussianScene::cachePoint3D(point3D_id_t point3D_id, Point3D& point3d)
-{
-    this->cached_point_cloud_[point3D_id] = point3d;
-}
-
-Point3D& GaussianScene::getPoint3D(point3D_id_t point3DId)
-{
-    if (this->cached_point_cloud_.find(point3DId) == this->cached_point_cloud_.end())
-        std::cout << "GaussianScene::getPoint3D(" << point3DId << ") invalid point Id, creating new point." << std::endl;
-
-    return this->cached_point_cloud_[point3DId];
-}
-
-void GaussianScene::clearCachedPoint3D()
-{
-    this->cached_point_cloud_.clear();
-}
-
 void GaussianScene::applyScaledTransformation(
     const float s,
     const Sophus::SE3f T)
 {
     // Apply the scaled transformation on gaussian keyframes
-    for (auto& kfit : keyframes_) {
+    for (auto &kfit : keyframes_)
+    {
         std::shared_ptr<GaussianKeyframe> pkf = kfit.second;
         Sophus::SE3f Twc = pkf->getPosef().inverse();
         Twc.translation() *= s;
@@ -106,8 +89,8 @@ void GaussianScene::applyScaledTransformation(
 }
 
 /**
- * @brief 
- * 
+ * @brief
+ *
  * @return std::tuple<Eigen::Vector3f, float> first=translate, second=radius
  */
 std::tuple<Eigen::Vector3f, float>
@@ -117,7 +100,8 @@ GaussianScene::getNerfppNorm()
     auto kfs = this->getAllKeyframes();
     std::size_t n_cams = kfs.size();
     cam_centers.reserve(n_cams);
-    for (auto& kfit : kfs) {
+    for (auto &kfit : kfs)
+    {
         auto pkf = kfit.second;
         auto W2C = pkf->getWorld2View2();
         auto C2W = W2C.inverse();
@@ -128,7 +112,8 @@ GaussianScene::getNerfppNorm()
     // get_center_and_diag(cam_centers)
     Eigen::Vector3f avg_cam_center;
     avg_cam_center.setZero();
-    for (const auto& cam_center : cam_centers) {
+    for (const auto &cam_center : cam_centers)
+    {
         avg_cam_center.x() += cam_center.x();
         avg_cam_center.y() += cam_center.y();
         avg_cam_center.z() += cam_center.z();
@@ -138,7 +123,8 @@ GaussianScene::getNerfppNorm()
     avg_cam_center.z() /= n_cams;
 
     float max_dist = 0.0f; // diagonal
-    for (std::size_t cam_idx = 0; cam_idx < n_cams; ++cam_idx) {
+    for (std::size_t cam_idx = 0; cam_idx < n_cams; ++cam_idx)
+    {
         float dist = (cam_centers[cam_idx] - avg_cam_center).norm();
         if (dist > max_dist)
             max_dist = dist;

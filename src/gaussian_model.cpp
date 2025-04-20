@@ -3,11 +3,11 @@
  * GRAPHDECO research group, https://team.inria.fr/graphdeco
  * All rights reserved.
  *
- * This software is free for non-commercial, research and evaluation use 
+ * This software is free for non-commercial, research and evaluation use
  * under the terms of the LICENSE.md file.
  *
  * For inquiries contact  george.drettakis@inria.fr
- * 
+ *
  * This file is Derivative Works of Gaussian Splatting,
  * created by Longwei Li, Huajian Huang, Hui Cheng and Sai-Kit Yeung in 2023,
  * as part of Photo-SLAM.
@@ -19,7 +19,7 @@ GaussianModel::GaussianModel(const int sh_degree)
     : active_sh_degree_(0), spatial_lr_scale_(0.0),
       lr_delay_steps_(0), lr_delay_mult_(1.0), max_steps_(1000000)
 {
-    this->max_sh_degree_ = sh_degree;  // 最大球谐函数的阶数
+    this->max_sh_degree_ = sh_degree; // 最大球谐函数的阶数
 
     // Device
     if (torch::cuda::is_available())
@@ -118,7 +118,7 @@ void GaussianModel::createFromPcd(
     const float spatial_lr_scale)
 {
     this->spatial_lr_scale_ = spatial_lr_scale;
-    torch::Tensor fused_color = sh_utils::RGB2SH(color);   // 将颜色张量转换为球谐系数张量feature
+    torch::Tensor fused_color = sh_utils::RGB2SH(color); // 将颜色张量转换为球谐系数张量feature
     auto temp = this->max_sh_degree_ + 1;
     torch::Tensor features = torch::zeros(
         {fused_color.size(0), 3, temp * temp},
@@ -163,96 +163,15 @@ void GaussianModel::createFromPcd(
     this->scaling_ = scales.requires_grad_();
     this->rotation_ = rots.requires_grad_();
     this->opacity_ = opacities.requires_grad_();
-    
+
     GAUSSIAN_MODEL_TENSORS_TO_VEC
 
-    this->max_radii2D_ = torch::zeros({this->getXYZ().size(0)}, torch::TensorOptions().device(device_type_));  // 初始化高斯半径
-}
-
-// 从稀疏点云中初始化高斯基元
-// Photo-SLAM中使用的函数
-void GaussianModel::createFromPcd(
-    std::map<point3D_id_t, Point3D> pcd,
-    const float spatial_lr_scale)
-{
-    this->spatial_lr_scale_ = spatial_lr_scale;
-    int num_points = static_cast<int>(pcd.size());   // 需要初始化的高斯数量
-    torch::Tensor fused_point_cloud = torch::zeros(
-        {num_points, 3},
-        torch::TensorOptions().dtype(torch::kFloat).device(device_type_)); // 按照大小初始化全零张量，表示高斯基元的坐标
-    torch::Tensor color = torch::zeros(
-        {num_points, 3},
-        torch::TensorOptions().dtype(torch::kFloat).device(device_type_)); // 按照大小初始化全零张量，表示高斯基元的颜色
-    auto pcd_it = pcd.begin();
-    
-    for (int point_idx = 0; point_idx < num_points; ++point_idx) {
-        auto& point = (*pcd_it).second;                            // 三维点坐标
-        fused_point_cloud.index({point_idx, 0}) = point.xyz_(0);
-        fused_point_cloud.index({point_idx, 1}) = point.xyz_(1);
-        fused_point_cloud.index({point_idx, 2}) = point.xyz_(2);
-        color.index({point_idx, 0}) = point.color_(0);
-        color.index({point_idx, 1}) = point.color_(1);
-        color.index({point_idx, 2}) = point.color_(2);
-        ++pcd_it;
-    }
-
-    // 将颜色张量转换为球谐系数张量feature
-    torch::Tensor fused_color = sh_utils::RGB2SH(color);  
-    auto temp = this->max_sh_degree_ + 1;
-    torch::Tensor features = torch::zeros(
-        {fused_color.size(0), 3, temp * temp},
-        torch::TensorOptions().dtype(torch::kFloat).device(device_type_));
-    features.index(
-        {torch::indexing::Slice(),
-         torch::indexing::Slice(0, 3),
-         0}) = fused_color;
-    features.index(
-        {torch::indexing::Slice(),
-         torch::indexing::Slice(3, features.size(1)),
-         torch::indexing::Slice(1, features.size(2))}) = 0.0f;
-
-    // std::cout << "[Gaussian Model]Number of points at initialization : " << fused_point_cloud.size(0) << std::endl;
-
-    torch::Tensor point_cloud_copy = fused_point_cloud.clone();
-    torch::Tensor dist2 = torch::clamp_min(distCUDA2(point_cloud_copy), 0.0000001);
-    torch::Tensor scales = torch::log(torch::sqrt(dist2));
-    auto scales_ndimension = scales.ndimension();
-    scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
-    torch::Tensor rots = torch::zeros({fused_point_cloud.size(0), 4}, torch::TensorOptions().device(device_type_));
-    rots.index({torch::indexing::Slice(), 0}) = 1;
-
-    torch::Tensor opacities = general_utils::inverse_sigmoid(
-        0.1f * torch::ones({fused_point_cloud.size(0), 1}, torch::TensorOptions().dtype(torch::kFloat).device(device_type_)));
-
-    this->exist_since_iter_ = torch::zeros(
-        {fused_point_cloud.size(0)},
-        torch::TensorOptions().dtype(torch::kInt32).device(device_type_));
-
-    this->xyz_ = fused_point_cloud.requires_grad_();
-    this->features_dc_ = features.index({torch::indexing::Slice(),
-                                         torch::indexing::Slice(),
-                                         torch::indexing::Slice(0, 1)})
-                             .transpose(1, 2)
-                             .contiguous()
-                             .requires_grad_();
-    this->features_rest_ = features.index({torch::indexing::Slice(),
-                                           torch::indexing::Slice(),
-                                           torch::indexing::Slice(1, features.size(2))})
-                               .transpose(1, 2)
-                               .contiguous()
-                               .requires_grad_();
-    this->scaling_ = scales.requires_grad_();
-    this->rotation_ = rots.requires_grad_();
-    this->opacity_ = opacities.requires_grad_();
-    
-    GAUSSIAN_MODEL_TENSORS_TO_VEC
-
-    this->max_radii2D_ = torch::zeros({this->getXYZ().size(0)}, torch::TensorOptions().device(device_type_));  // 初始化高斯半径
+    this->max_radii2D_ = torch::zeros({this->getXYZ().size(0)}, torch::TensorOptions().device(device_type_)); // 初始化高斯半径
 }
 
 void GaussianModel::increasePcd(std::vector<float> points, std::vector<float> colors, const int iteration)
 {
-// auto time1 = std::chrono::steady_clock::now();
+    // auto time1 = std::chrono::steady_clock::now();
     assert(points.size() == colors.size());
     assert(points.size() % 3 == 0);
     auto num_new_points = static_cast<int>(points.size() / 3);
@@ -260,19 +179,23 @@ void GaussianModel::increasePcd(std::vector<float> points, std::vector<float> co
         return;
 
     torch::Tensor new_point_cloud = torch::from_blob(
-        points.data(), {num_new_points, 3},
-        torch::TensorOptions().dtype(torch::kFloat32)).to(device_type_);
-        // torch::zeros({num_new_points, 3}, xyz_.options());
+                                        points.data(), {num_new_points, 3},
+                                        torch::TensorOptions().dtype(torch::kFloat32))
+                                        .to(device_type_);
+    // torch::zeros({num_new_points, 3}, xyz_.options());
     torch::Tensor new_colors = torch::from_blob(
-        colors.data(), {num_new_points, 3},
-        torch::TensorOptions().dtype(torch::kFloat32)).to(device_type_);
-        // torch::zeros({num_new_points, 3}, xyz_.options());
+                                   colors.data(), {num_new_points, 3},
+                                   torch::TensorOptions().dtype(torch::kFloat32))
+                                   .to(device_type_);
+    // torch::zeros({num_new_points, 3}, xyz_.options());
 
-    if (sparse_points_xyz_.size(0) == 0) {
+    if (sparse_points_xyz_.size(0) == 0)
+    {
         sparse_points_xyz_ = new_point_cloud;
         sparse_points_color_ = new_colors;
     }
-    else {
+    else
+    {
         sparse_points_xyz_ = torch::cat({sparse_points_xyz_, new_point_cloud}, /*dim=*/0);
         sparse_points_color_ = torch::cat({sparse_points_color_, new_colors}, /*dim=*/0);
     }
@@ -301,7 +224,7 @@ void GaussianModel::increasePcd(std::vector<float> points, std::vector<float> co
     scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
     torch::Tensor rots = torch::zeros(
         {new_point_cloud.size(0), 4},
-         torch::TensorOptions().device(device_type_));
+        torch::TensorOptions().device(device_type_));
     rots.index({torch::indexing::Slice(), 0}) = 1;
     torch::Tensor opacities = general_utils::inverse_sigmoid(
         0.1f * torch::ones(
@@ -315,22 +238,22 @@ void GaussianModel::increasePcd(std::vector<float> points, std::vector<float> co
 
     auto new_xyz = new_point_cloud;
     auto new_features_dc = features.index({torch::indexing::Slice(),
-                                                    torch::indexing::Slice(),
-                                                    torch::indexing::Slice(0, 1)})
-                                        .transpose(1, 2)
-                                        .contiguous();
+                                           torch::indexing::Slice(),
+                                           torch::indexing::Slice(0, 1)})
+                               .transpose(1, 2)
+                               .contiguous();
     auto new_features_rest = features.index({torch::indexing::Slice(),
-                                                      torch::indexing::Slice(),
-                                                      torch::indexing::Slice(1, features.size(2))})
-                                          .transpose(1, 2)
-                                          .contiguous();
+                                             torch::indexing::Slice(),
+                                             torch::indexing::Slice(1, features.size(2))})
+                                 .transpose(1, 2)
+                                 .contiguous();
     auto new_opacities = opacities;
     auto new_scaling = scales;
     auto new_rotation = rots;
 
-// auto time2 = std::chrono::steady_clock::now();
-// auto time = std::chrono::duration_cast<std::chrono::milliseconds>(time2-time1).count();
-// std::cout << "increasePcd(umap) preparation time: " << time << " ms" <<std::endl;
+    // auto time2 = std::chrono::steady_clock::now();
+    // auto time = std::chrono::duration_cast<std::chrono::milliseconds>(time2-time1).count();
+    // std::cout << "increasePcd(umap) preparation time: " << time << " ms" <<std::endl;
 
     densificationPostfix(
         new_xyz,
@@ -339,27 +262,35 @@ void GaussianModel::increasePcd(std::vector<float> points, std::vector<float> co
         new_opacities,
         new_scaling,
         new_rotation,
-        new_exist_since_iter
-    );
+        new_exist_since_iter);
 
     c10::cuda::CUDACachingAllocator::emptyCache();
-// auto time3 = std::chrono::steady_clock::now();
-// time = std::chrono::duration_cast<std::chrono::milliseconds>(time3-time2).count();
-// std::cout << "increasePcd(umap) postfix time: " << time << " ms" <<std::endl;
+    // auto time3 = std::chrono::steady_clock::now();
+    // time = std::chrono::duration_cast<std::chrono::milliseconds>(time3-time2).count();
+    // std::cout << "increasePcd(umap) postfix time: " << time << " ms" <<std::endl;
+}
+// 针对Tensor输入的 `increasePcd` 函数实现
+
+void GaussianModel::increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &new_colors, const int iteration, const float spatial_lr_scale)
+{
+    this->spatial_lr_scale_ = spatial_lr_scale;
+    this->increasePcd(new_point_cloud, new_colors, iteration);
 }
 
-void GaussianModel::increasePcd(torch::Tensor& new_point_cloud, torch::Tensor& new_colors, const int iteration)
+void GaussianModel::increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &new_colors, const int iteration)
 {
-// auto time1 = std::chrono::steady_clock::now();
+    // auto time1 = std::chrono::steady_clock::now();
     auto num_new_points = new_point_cloud.size(0);
     if (num_new_points == 0)
         return;
 
-    if (sparse_points_xyz_.size(0) == 0) {
+    if (sparse_points_xyz_.size(0) == 0)
+    {
         sparse_points_xyz_ = new_point_cloud;
         sparse_points_color_ = new_colors;
     }
-    else {
+    else
+    {
         sparse_points_xyz_ = torch::cat({sparse_points_xyz_, new_point_cloud}, /*dim=*/0);
         sparse_points_color_ = torch::cat({sparse_points_color_, new_colors}, /*dim=*/0);
     }
@@ -388,7 +319,7 @@ void GaussianModel::increasePcd(torch::Tensor& new_point_cloud, torch::Tensor& n
     scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
     torch::Tensor rots = torch::zeros(
         {new_point_cloud.size(0), 4},
-         torch::TensorOptions().device(device_type_));
+        torch::TensorOptions().device(device_type_));
     rots.index({torch::indexing::Slice(), 0}) = 1;
     torch::Tensor opacities = general_utils::inverse_sigmoid(
         0.1f * torch::ones(
@@ -402,22 +333,22 @@ void GaussianModel::increasePcd(torch::Tensor& new_point_cloud, torch::Tensor& n
 
     auto new_xyz = new_point_cloud;
     auto new_features_dc = features.index({torch::indexing::Slice(),
-                                                    torch::indexing::Slice(),
-                                                    torch::indexing::Slice(0, 1)})
-                                        .transpose(1, 2)
-                                        .contiguous();
+                                           torch::indexing::Slice(),
+                                           torch::indexing::Slice(0, 1)})
+                               .transpose(1, 2)
+                               .contiguous();
     auto new_features_rest = features.index({torch::indexing::Slice(),
-                                                      torch::indexing::Slice(),
-                                                      torch::indexing::Slice(1, features.size(2))})
-                                          .transpose(1, 2)
-                                          .contiguous();
+                                             torch::indexing::Slice(),
+                                             torch::indexing::Slice(1, features.size(2))})
+                                 .transpose(1, 2)
+                                 .contiguous();
     auto new_opacities = opacities;
     auto new_scaling = scales;
     auto new_rotation = rots;
 
-// auto time2 = std::chrono::steady_clock::now();
-// auto time = std::chrono::duration_cast<std::chrono::milliseconds>(time2-time1).count();
-// std::cout << "increasePcd(tensor) preparation time: " << time << " ms" <<std::endl;
+    // auto time2 = std::chrono::steady_clock::now();
+    // auto time = std::chrono::duration_cast<std::chrono::milliseconds>(time2-time1).count();
+    // std::cout << "increasePcd(tensor) preparation time: " << time << " ms" <<std::endl;
 
     densificationPostfix(
         new_xyz,
@@ -426,14 +357,13 @@ void GaussianModel::increasePcd(torch::Tensor& new_point_cloud, torch::Tensor& n
         new_opacities,
         new_scaling,
         new_rotation,
-        new_exist_since_iter
-    );
+        new_exist_since_iter);
 
     c10::cuda::CUDACachingAllocator::emptyCache();
 
-// auto time3 = std::chrono::steady_clock::now();
-// time = std::chrono::duration_cast<std::chrono::milliseconds>(time3-time2).count();
-// std::cout << "increasePcd(tensor) postfix time: " << time << " ms" <<std::endl;
+    // auto time3 = std::chrono::steady_clock::now();
+    // time = std::chrono::duration_cast<std::chrono::milliseconds>(time3-time2).count();
+    // std::cout << "increasePcd(tensor) postfix time: " << time << " ms" <<std::endl;
 }
 
 void GaussianModel::applyScaledTransformation(
@@ -447,19 +377,19 @@ void GaussianModel::applyScaledTransformation(
         tensor_utils::EigenMatrix2TorchTensor(T.matrix(), device_type_).transpose(0, 1);
     transformPoints(this->xyz_, T_tensor);
 
-// torch::Tensor scales;
-// torch::Tensor point_cloud_copy = this->xyz_.clone();
-// torch::Tensor dist2 = torch::clamp_min(distCUDA2(point_cloud_copy), 0.0000001);
-// scales = torch::log(torch::sqrt(dist2));
-// auto scales_ndimension = scales.ndimension();
-// scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
+    // torch::Tensor scales;
+    // torch::Tensor point_cloud_copy = this->xyz_.clone();
+    // torch::Tensor dist2 = torch::clamp_min(distCUDA2(point_cloud_copy), 0.0000001);
+    // scales = torch::log(torch::sqrt(dist2));
+    // auto scales_ndimension = scales.ndimension();
+    // scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
     this->scaling_ *= s;
     scaledTransformationPostfix(this->xyz_, this->scaling_);
 }
 
 void GaussianModel::scaledTransformationPostfix(
-    torch::Tensor& new_xyz,
-    torch::Tensor& new_scaling)
+    torch::Tensor &new_xyz,
+    torch::Tensor &new_scaling)
 {
     // param_groups[0] = xyz_
     torch::Tensor optimizable_xyz = this->replaceTensorToOptimizer(new_xyz, 0);
@@ -474,13 +404,13 @@ void GaussianModel::scaledTransformationPostfix(
 }
 
 void GaussianModel::scaledTransformVisiblePointsOfKeyframe(
-    torch::Tensor& point_not_transformed_flags,
-    torch::Tensor& diff_pose,
-    torch::Tensor& kf_world_view_transform,
-    torch::Tensor& kf_full_proj_transform,
+    torch::Tensor &point_not_transformed_flags,
+    torch::Tensor &diff_pose,
+    torch::Tensor &kf_world_view_transform,
+    torch::Tensor &kf_full_proj_transform,
     const int kf_creation_iter,
     const int stable_num_iter_existence,
-    int& num_transformed,
+    int &num_transformed,
     const float scale)
 {
     torch::NoGradGuard no_grad;
@@ -503,14 +433,13 @@ void GaussianModel::scaledTransformVisiblePointsOfKeyframe(
         kf_world_view_transform,
         kf_full_proj_transform,
         num_transformed,
-        scale
-    );
+        scale);
 
-// torch::Tensor point_cloud_copy = points.clone();
-// torch::Tensor dist2 = torch::clamp_min(distCUDA2(point_cloud_copy), 0.0000001);
-// torch::Tensor scales = torch::log(torch::sqrt(dist2));
-// auto scales_ndimension = scales.ndimension();
-// scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
+    // torch::Tensor point_cloud_copy = points.clone();
+    // torch::Tensor dist2 = torch::clamp_min(distCUDA2(point_cloud_copy), 0.0000001);
+    // torch::Tensor scales = torch::log(torch::sqrt(dist2));
+    // auto scales_ndimension = scales.ndimension();
+    // scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
 
     // Postfix
     // ==================================
@@ -534,7 +463,7 @@ void GaussianModel::scaledTransformVisiblePointsOfKeyframe(
     this->Tensor_vec_rotation_ = {this->rotation_};
 }
 
-void GaussianModel::trainingSetup(const GaussianOptimizationParams& training_args)
+void GaussianModel::trainingSetup(const GaussianOptimizationParams &training_args)
 {
     setPercentDense(training_args.percent_dense_);
     this->xyz_gradient_accum_ = torch::zeros({this->getXYZ().size(0), 1}, torch::TensorOptions().device(device_type_));
@@ -625,12 +554,12 @@ void GaussianModel::resetOpacity()
     this->Tensor_vec_opacity_ = {this->opacity_};
 }
 
-torch::Tensor GaussianModel::replaceTensorToOptimizer(torch::Tensor& tensor, int tensor_idx)
+torch::Tensor GaussianModel::replaceTensorToOptimizer(torch::Tensor &tensor, int tensor_idx)
 {
-    auto& param = this->optimizer_->param_groups()[tensor_idx].params()[0];
-    auto& state = optimizer_->state();
+    auto &param = this->optimizer_->param_groups()[tensor_idx].params()[0];
+    auto &state = optimizer_->state();
     auto key = c10::guts::to_string(param.unsafeGetTensorImpl());
-    auto& stored_state = static_cast<torch::optim::AdamParamState&>(*state[key]);
+    auto &stored_state = static_cast<torch::optim::AdamParamState &>(*state[key]);
     auto new_state = std::make_unique<torch::optim::AdamParamState>();
     new_state->step(stored_state.step());
     new_state->exp_avg(torch::zeros_like(tensor));
@@ -646,19 +575,21 @@ torch::Tensor GaussianModel::replaceTensorToOptimizer(torch::Tensor& tensor, int
     return optimizable_tensors;
 }
 
-void GaussianModel::prunePoints(torch::Tensor& mask)
+void GaussianModel::prunePoints(torch::Tensor &mask)
 {
     auto valid_points_mask = ~mask;
 
     // _prune_optimizer
     std::vector<torch::Tensor> optimizable_tensors(6);
-    auto& param_groups = this->optimizer_->param_groups();
-    auto& state = this->optimizer_->state();
-    for (int group_idx = 0; group_idx < 6; ++group_idx) {
-        auto& param = param_groups[group_idx].params()[0];
+    auto &param_groups = this->optimizer_->param_groups();
+    auto &state = this->optimizer_->state();
+    for (int group_idx = 0; group_idx < 6; ++group_idx)
+    {
+        auto &param = param_groups[group_idx].params()[0];
         auto key = c10::guts::to_string(param.unsafeGetTensorImpl());
-        if (state.find(key) != state.end()) {
-            auto& stored_state = static_cast<torch::optim::AdamParamState&>(*state[key]);
+        if (state.find(key) != state.end())
+        {
+            auto &stored_state = static_cast<torch::optim::AdamParamState &>(*state[key]);
             auto new_state = std::make_unique<torch::optim::AdamParamState>();
             new_state->step(stored_state.step());
             new_state->exp_avg(stored_state.exp_avg().index({valid_points_mask}).clone());
@@ -666,13 +597,16 @@ void GaussianModel::prunePoints(torch::Tensor& mask)
             // new_state->max_exp_avg_sq(stored_state.max_exp_avg_sq().clone()); // needed only when options.amsgrad(true), which is false by default
 
             state.erase(key);
-            param = param.index({valid_points_mask}).requires_grad_();
+            // param = param.index({valid_points_mask}).requires_grad_();
+            param = param.index({valid_points_mask}).detach().requires_grad_();
             key = c10::guts::to_string(param.unsafeGetTensorImpl());
             state[key] = std::move(new_state);
             optimizable_tensors[group_idx] = param;
         }
-        else {
-            param = param.index({valid_points_mask}).requires_grad_();
+        else
+        {
+            // param = param.index({valid_points_mask}).requires_grad_();
+            param = param.index({valid_points_mask}).detach().requires_grad_();
             optimizable_tensors[group_idx] = param;
         }
     }
@@ -703,13 +637,13 @@ void GaussianModel::prunePoints(torch::Tensor& mask)
 }
 
 void GaussianModel::densificationPostfix(
-    torch::Tensor& new_xyz,
-    torch::Tensor& new_features_dc,
-    torch::Tensor& new_features_rest,
-    torch::Tensor& new_opacities,
-    torch::Tensor& new_scaling,
-    torch::Tensor& new_rotation,
-    torch::Tensor& new_exist_since_iter)
+    torch::Tensor &new_xyz,
+    torch::Tensor &new_features_dc,
+    torch::Tensor &new_features_rest,
+    torch::Tensor &new_opacities,
+    torch::Tensor &new_scaling,
+    torch::Tensor &new_rotation,
+    torch::Tensor &new_exist_since_iter)
 {
     // cat_tensors_to_optimizer
     std::vector<torch::Tensor> optimizable_tensors(6);
@@ -719,18 +653,19 @@ void GaussianModel::densificationPostfix(
         new_features_rest,
         new_opacities,
         new_scaling,
-        new_rotation
-    };
-    auto& param_groups = this->optimizer_->param_groups();
-    auto& state = this->optimizer_->state();
-    for (int group_idx = 0; group_idx < 6; ++group_idx) {
-        auto& group = param_groups[group_idx];
+        new_rotation};
+    auto &param_groups = this->optimizer_->param_groups();
+    auto &state = this->optimizer_->state();
+    for (int group_idx = 0; group_idx < 6; ++group_idx)
+    {
+        auto &group = param_groups[group_idx];
         assert(group.params().size() == 1);
-        auto& extension_tensor = tensors_dict[group_idx];
-        auto& param = group.params()[0];
+        auto &extension_tensor = tensors_dict[group_idx];
+        auto &param = group.params()[0];
         auto key = c10::guts::to_string(param.unsafeGetTensorImpl());
-        if (state.find(key) != state.end()) {
-            auto& stored_state = static_cast<torch::optim::AdamParamState&>(*state[key]);
+        if (state.find(key) != state.end())
+        {
+            auto &stored_state = static_cast<torch::optim::AdamParamState &>(*state[key]);
             auto new_state = std::make_unique<torch::optim::AdamParamState>();
             new_state->step(stored_state.step());
             new_state->exp_avg(torch::cat({stored_state.exp_avg().clone(), torch::zeros_like(extension_tensor)}, /*dim=*/0));
@@ -738,14 +673,19 @@ void GaussianModel::densificationPostfix(
             // new_state->max_exp_avg_sq(stored_state.max_exp_avg_sq().clone());  // needed only when options.amsgrad(true), which is false by default
 
             state.erase(key);
-            param = torch::cat({param, extension_tensor}, /*dim=*/0).requires_grad_();
+            // param = torch::cat({param, extension_tensor}, /*dim=*/0).requires_grad_();
+            param = torch::cat({param.detach(), extension_tensor}, /*dim=*/0).requires_grad_(); // Detach to avoid non-leaf tensor issue
             key = c10::guts::to_string(param.unsafeGetTensorImpl());
             state[key] = std::move(new_state);
 
             optimizable_tensors[group_idx] = param;
         }
-        else {
-            param = torch::cat({param, extension_tensor}, /*dim=*/0).requires_grad_();
+        else
+        {
+            // param = torch::cat({param, extension_tensor}, /*dim=*/0).requires_grad_();
+            // optimizable_tensors[group_idx] = param;
+
+            param = torch::cat({param.detach(), extension_tensor}, /*dim=*/0).requires_grad_(); // Detach to avoid non-leaf tensor issue
             optimizable_tensors[group_idx] = param;
         }
     }
@@ -776,7 +716,7 @@ void GaussianModel::densificationPostfix(
 
 // 致密化和分裂高斯基元
 void GaussianModel::densifyAndSplit(
-    torch::Tensor& grads,
+    torch::Tensor &grads,
     float grad_threshold,
     float scene_extent,
     int N)
@@ -788,8 +728,7 @@ void GaussianModel::densifyAndSplit(
     auto selected_pts_mask = torch::where(padded_grad >= grad_threshold, true, false);
     selected_pts_mask = torch::logical_and(
         selected_pts_mask,
-        std::get<0>(torch::max(this->getScalingActivation(), /*dim=*/1)) > percentDense() * scene_extent
-    );
+        std::get<0>(torch::max(this->getScalingActivation(), /*dim=*/1)) > percentDense() * scene_extent);
 
     auto stds = this->getScalingActivation().index({selected_pts_mask}).repeat({N, 1});
     auto means = torch::zeros({stds.size(0), 3}, torch::TensorOptions().device(device_type_));
@@ -812,18 +751,15 @@ void GaussianModel::densifyAndSplit(
         new_opacity,
         new_scaling,
         new_rotation,
-        new_exist_since_iter
-    );
+        new_exist_since_iter);
 
-    auto prune_filter = torch::cat({
-        selected_pts_mask,
-        torch::zeros({(N * selected_pts_mask.sum()).item<int>()}, torch::TensorOptions().device(device_type_).dtype(torch::kBool))
-    });
+    auto prune_filter = torch::cat({selected_pts_mask,
+                                    torch::zeros({(N * selected_pts_mask.sum()).item<int>()}, torch::TensorOptions().device(device_type_).dtype(torch::kBool))});
     this->prunePoints(prune_filter);
 }
 
 void GaussianModel::densifyAndClone(
-    torch::Tensor& grads,
+    torch::Tensor &grads,
     float grad_threshold,
     float scene_extent)
 {
@@ -831,8 +767,7 @@ void GaussianModel::densifyAndClone(
     auto selected_pts_mask = torch::where(torch::frobenius_norm(grads, /*dim=*/-1) >= grad_threshold, true, false);
     selected_pts_mask = torch::logical_and(
         selected_pts_mask,
-        std::get<0>(torch::max(this->getScalingActivation(), /*dim=*/1)) <= percentDense() * scene_extent
-    );
+        std::get<0>(torch::max(this->getScalingActivation(), /*dim=*/1)) <= percentDense() * scene_extent);
 
     auto new_xyz = this->xyz_.index({selected_pts_mask});
     auto new_features_dc = this->features_dc_.index({selected_pts_mask});
@@ -850,8 +785,7 @@ void GaussianModel::densifyAndClone(
         new_opacities,
         new_scaling,
         new_rotation,
-        new_exist_since_iter
-    );
+        new_exist_since_iter);
 }
 
 void GaussianModel::densifyAndPrune(
@@ -866,7 +800,8 @@ void GaussianModel::densifyAndPrune(
     this->densifyAndSplit(grads, max_grad, extent);
 
     auto prune_mask = (this->getOpacityActivation() < min_opacity).squeeze();
-    if (max_screen_size) {
+    if (max_screen_size)
+    {
         auto big_points_vs = this->max_radii2D_ > max_screen_size;
         auto big_points_ws = std::get<0>(this->getScalingActivation().max(/*dim=*/1)) > 0.1f * extent;
         prune_mask = torch::logical_or(torch::logical_or(prune_mask, big_points_vs), big_points_ws);
@@ -877,8 +812,8 @@ void GaussianModel::densifyAndPrune(
 }
 
 void GaussianModel::addDensificationStats(
-    torch::Tensor& viewspace_point_tensor,
-    torch::Tensor& update_filter)
+    torch::Tensor &viewspace_point_tensor,
+    torch::Tensor &update_filter)
 {
     this->xyz_gradient_accum_.index_put_(
         {update_filter},
@@ -908,14 +843,16 @@ void GaussianModel::loadPly(std::filesystem::path ply_path)
     ply_file.parse_header(instream_binary);
 
     std::cout << "\t[ply_header] Type: " << (ply_file.is_binary_file() ? "binary" : "ascii") << std::endl;
-    for (const auto & c : ply_file.get_comments())
+    for (const auto &c : ply_file.get_comments())
         std::cout << "\t[ply_header] Comment: " << c << std::endl;
-    for (const auto & c : ply_file.get_info())
+    for (const auto &c : ply_file.get_info())
         std::cout << "\t[ply_header] Info: " << c << std::endl;
 
-    for (const auto &e : ply_file.get_elements()) {
+    for (const auto &e : ply_file.get_elements())
+    {
         std::cout << "\t[ply_header] element: " << e.name << " (" << e.size << ")" << std::endl;
-        for (const auto &p : e.properties) {
+        for (const auto &p : e.properties)
+        {
             std::cout << "\t[ply_header] \tproperty: " << p.name << " (type=" << tinyply::PropertyTable[p.propertyType].str << ")";
             if (p.isList)
                 std::cout << " (list_type=" << tinyply::PropertyTable[p.listType].str << ")";
@@ -925,38 +862,81 @@ void GaussianModel::loadPly(std::filesystem::path ply_path)
 
     std::shared_ptr<tinyply::PlyData> xyz, f_dc, f_rest, opacity, scales, rot;
 
-    try { xyz = ply_file.request_properties_from_element("vertex", { "x", "y", "z" }); }
-    catch (const std::exception & e) { std::cerr << "tinyply exception: " << e.what() << std::endl; }
+    try
+    {
+        xyz = ply_file.request_properties_from_element("vertex", {"x", "y", "z"});
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "tinyply exception: " << e.what() << std::endl;
+    }
 
-    try { f_dc = ply_file.request_properties_from_element("vertex", { "f_dc_0", "f_dc_1", "f_dc_2" }); }
-    catch (const std::exception & e) { std::cerr << "tinyply exception: " << e.what() << std::endl; }
+    try
+    {
+        f_dc = ply_file.request_properties_from_element("vertex", {"f_dc_0", "f_dc_1", "f_dc_2"});
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "tinyply exception: " << e.what() << std::endl;
+    }
 
     int n_f_rest = ((max_sh_degree_ + 1) * (max_sh_degree_ + 1) - 1) * 3;
-    if (n_f_rest >= 0) {
+    if (n_f_rest >= 0)
+    {
         std::vector<std::string> f_rest_element_names(n_f_rest);
         for (int i = 0; i < n_f_rest; ++i)
             f_rest_element_names[i] = "f_rest_" + std::to_string(i);
-        try {f_rest = ply_file.request_properties_from_element("vertex", f_rest_element_names); }
-        catch (const std::exception & e) { std::cerr << "tinyply exception: " << e.what() << std::endl; }
+        try
+        {
+            f_rest = ply_file.request_properties_from_element("vertex", f_rest_element_names);
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "tinyply exception: " << e.what() << std::endl;
+        }
     }
 
-    try { opacity = ply_file.request_properties_from_element("vertex", { "opacity" }); }
-    catch (const std::exception & e) { std::cerr << "tinyply exception: " << e.what() << std::endl; }
+    try
+    {
+        opacity = ply_file.request_properties_from_element("vertex", {"opacity"});
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "tinyply exception: " << e.what() << std::endl;
+    }
 
-    try { scales = ply_file.request_properties_from_element("vertex", { "scale_0", "scale_1", "scale_2" }); }
-    catch (const std::exception & e) { std::cerr << "tinyply exception: " << e.what() << std::endl; }
+    try
+    {
+        scales = ply_file.request_properties_from_element("vertex", {"scale_0", "scale_1", "scale_2"});
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "tinyply exception: " << e.what() << std::endl;
+    }
 
-    try { rot = ply_file.request_properties_from_element("vertex", { "rot_0", "rot_1", "rot_2", "rot_3" }); }
-    catch (const std::exception & e) { std::cerr << "tinyply exception: " << e.what() << std::endl; }
+    try
+    {
+        rot = ply_file.request_properties_from_element("vertex", {"rot_0", "rot_1", "rot_2", "rot_3"});
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "tinyply exception: " << e.what() << std::endl;
+    }
 
     ply_file.read(instream_binary);
 
-    if (xyz)     std::cout << "\tRead " << xyz->count     << " total xyz "     << std::endl;
-    if (f_dc)    std::cout << "\tRead " << f_dc->count    << " total f_dc "    << std::endl;
-    if (f_rest)  std::cout << "\tRead " << f_rest->count  << " total f_rest "  << std::endl;
-    if (opacity) std::cout << "\tRead " << opacity->count << " total opacity " << std::endl;
-    if (scales)  std::cout << "\tRead " << scales->count  << " total scales "  << std::endl;
-    if (rot)     std::cout << "\tRead " << rot->count     << " total rot "     << std::endl;
+    if (xyz)
+        std::cout << "\tRead " << xyz->count << " total xyz " << std::endl;
+    if (f_dc)
+        std::cout << "\tRead " << f_dc->count << " total f_dc " << std::endl;
+    if (f_rest)
+        std::cout << "\tRead " << f_rest->count << " total f_rest " << std::endl;
+    if (opacity)
+        std::cout << "\tRead " << opacity->count << " total opacity " << std::endl;
+    if (scales)
+        std::cout << "\tRead " << scales->count << " total scales " << std::endl;
+    if (rot)
+        std::cout << "\tRead " << rot->count << " total rot " << std::endl;
 
     // Data to std::vector
     const int num_points = xyz->count;
@@ -987,28 +967,38 @@ void GaussianModel::loadPly(std::filesystem::path ply_path)
 
     // std::vector to torch::Tensor
     this->xyz_ = torch::from_blob(
-        xyz_vector.data(), {num_points, 3},
-        torch::TensorOptions().dtype(torch::kFloat32)).to(device_type_);
+                     xyz_vector.data(), {num_points, 3},
+                     torch::TensorOptions().dtype(torch::kFloat32))
+                     .to(device_type_);
 
     this->features_dc_ = torch::from_blob(
-        f_dc_vector.data(), {num_points, 3, 1},
-        torch::TensorOptions().dtype(torch::kFloat32)).to(device_type_).transpose(1, 2).contiguous();
+                             f_dc_vector.data(), {num_points, 3, 1},
+                             torch::TensorOptions().dtype(torch::kFloat32))
+                             .to(device_type_)
+                             .transpose(1, 2)
+                             .contiguous();
 
     this->features_rest_ = torch::from_blob(
-        f_rest_vector.data(), {num_points, 3, n_f_rest / 3},
-        torch::TensorOptions().dtype(torch::kFloat32)).to(device_type_).transpose(1, 2).contiguous();
+                               f_rest_vector.data(), {num_points, 3, n_f_rest / 3},
+                               torch::TensorOptions().dtype(torch::kFloat32))
+                               .to(device_type_)
+                               .transpose(1, 2)
+                               .contiguous();
 
     this->opacity_ = torch::from_blob(
-        opacity_vector.data(), {num_points, 1},
-        torch::TensorOptions().dtype(torch::kFloat32)).to(device_type_);
+                         opacity_vector.data(), {num_points, 1},
+                         torch::TensorOptions().dtype(torch::kFloat32))
+                         .to(device_type_);
 
     this->scaling_ = torch::from_blob(
-        scales_vector.data(), {num_points, 3},
-        torch::TensorOptions().dtype(torch::kFloat32)).to(device_type_);
+                         scales_vector.data(), {num_points, 3},
+                         torch::TensorOptions().dtype(torch::kFloat32))
+                         .to(device_type_);
 
     this->rotation_ = torch::from_blob(
-        rot_vector.data(), {num_points, 4},
-        torch::TensorOptions().dtype(torch::kFloat32)).to(device_type_);
+                          rot_vector.data(), {num_points, 4},
+                          torch::TensorOptions().dtype(torch::kFloat32))
+                          .to(device_type_);
 
     GAUSSIAN_MODEL_TENSORS_TO_VEC
 
@@ -1029,7 +1019,8 @@ void GaussianModel::savePly(std::filesystem::path result_path)
     std::filebuf fb_binary;
     fb_binary.open(result_path, std::ios::out | std::ios::binary);
     std::ostream outstream_binary(&fb_binary);
-    if (outstream_binary.fail()) throw std::runtime_error("failed to open " + result_path.string());
+    if (outstream_binary.fail())
+        throw std::runtime_error("failed to open " + result_path.string());
 
     tinyply::PlyFile result_file;
 
@@ -1037,14 +1028,14 @@ void GaussianModel::savePly(std::filesystem::path result_path)
     result_file.add_properties_to_element(
         "vertex", {"x", "y", "z"},
         tinyply::Type::FLOAT32, xyz.size(0),
-        reinterpret_cast<uint8_t*>(xyz.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(xyz.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // normals
     result_file.add_properties_to_element(
         "vertex", {"nx", "ny", "nz"},
         tinyply::Type::FLOAT32, normals.size(0),
-        reinterpret_cast<uint8_t*>(normals.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(normals.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // f_dc
@@ -1056,7 +1047,7 @@ void GaussianModel::savePly(std::filesystem::path result_path)
     result_file.add_properties_to_element(
         "vertex", property_names_f_dc,
         tinyply::Type::FLOAT32, this->features_dc_.size(0),
-        reinterpret_cast<uint8_t*>(f_dc.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(f_dc.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // f_rest
@@ -1068,14 +1059,14 @@ void GaussianModel::savePly(std::filesystem::path result_path)
     result_file.add_properties_to_element(
         "vertex", property_names_f_rest,
         tinyply::Type::FLOAT32, this->features_rest_.size(0),
-        reinterpret_cast<uint8_t*>(f_rest.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(f_rest.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // opacities
     result_file.add_properties_to_element(
         "vertex", {"opacity"},
         tinyply::Type::FLOAT32, opacities.size(0),
-        reinterpret_cast<uint8_t*>(opacities.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(opacities.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // scale
@@ -1087,7 +1078,7 @@ void GaussianModel::savePly(std::filesystem::path result_path)
     result_file.add_properties_to_element(
         "vertex", property_names_scale,
         tinyply::Type::FLOAT32, scale.size(0),
-        reinterpret_cast<uint8_t*>(scale.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(scale.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // rotation
@@ -1099,7 +1090,7 @@ void GaussianModel::savePly(std::filesystem::path result_path)
     result_file.add_properties_to_element(
         "vertex", property_names_rotation,
         tinyply::Type::FLOAT32, rotation.size(0),
-        reinterpret_cast<uint8_t*>(rotation.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(rotation.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // Write the file
@@ -1118,7 +1109,8 @@ void GaussianModel::saveSparsePointsPly(std::filesystem::path result_path)
     std::filebuf fb_binary;
     fb_binary.open(result_path, std::ios::out | std::ios::binary);
     std::ostream outstream_binary(&fb_binary);
-    if (outstream_binary.fail()) throw std::runtime_error("failed to open " + result_path.string());
+    if (outstream_binary.fail())
+        throw std::runtime_error("failed to open " + result_path.string());
 
     tinyply::PlyFile result_file;
 
@@ -1126,21 +1118,21 @@ void GaussianModel::saveSparsePointsPly(std::filesystem::path result_path)
     result_file.add_properties_to_element(
         "vertex", {"x", "y", "z"},
         tinyply::Type::FLOAT32, xyz.size(0),
-        reinterpret_cast<uint8_t*>(xyz.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(xyz.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // normals
     result_file.add_properties_to_element(
         "vertex", {"nx", "ny", "nz"},
         tinyply::Type::FLOAT32, normals.size(0),
-        reinterpret_cast<uint8_t*>(normals.data_ptr<float>()),
+        reinterpret_cast<uint8_t *>(normals.data_ptr<float>()),
         tinyply::Type::INVALID, 0);
 
     // color
     result_file.add_properties_to_element(
         "vertex", {"red", "green", "blue"},
         tinyply::Type::UINT8, color.size(0),
-        reinterpret_cast<uint8_t*>(color.data_ptr<uint8_t>()),
+        reinterpret_cast<uint8_t *>(color.data_ptr<uint8_t>()),
         tinyply::Type::INVALID, 0);
 
     // Write the file
@@ -1174,8 +1166,8 @@ void GaussianModel::setPercentDense(const float percent_dense)
  *  :param conf: config subtree 'lr' or similar
  *  :param max_steps: int, the number of steps during optimization.
  *  :return HoF which takes step as input
- * @param iteration 
- * @return float 
+ * @param iteration
+ * @return float
  */
 float GaussianModel::exponLrFunc(int step)
 {

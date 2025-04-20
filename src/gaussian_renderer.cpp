@@ -75,20 +75,13 @@ GaussianRenderer::render(
     /* If precomputed 3d covariance is provided, use it. If not, then it will be computed from
        scaling / rotation by the rasterizer. 
      */
-
-    // bool has_scales = false,
-    //      has_rotations = false,
-    //      has_cov3D_precomp = false;
     torch::Tensor scales, rotations, cov3D_precomp;
     if (pipe.compute_cov3D_) {
         cov3D_precomp = pc->getCovarianceActivation();
-        // has_cov3D_precomp = true;
     }
     else {
         scales = pc->getScalingActivation();
         rotations = pc->getRotationActivation();
-        // has_scales = true;
-        // has_rotations = true;
     }
 
     /* If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
@@ -126,11 +119,6 @@ GaussianRenderer::render(
         means3D,
         means2D,
         opacity,
-        // has_shs,
-        // has_color_precomp,
-        // has_scales,
-        // has_rotations,
-        // has_cov3D_precomp,
         dc,
         shs,
         colors_precomp,
