@@ -72,6 +72,20 @@ void GaussianKeyframe::setPose(const torch::Tensor &Tcw)
     this->t_.z() = Tcw_contig[2][3].item<float>();
     this->Tcw_ = Sophus::SE3d(this->R_quaternion_, this->t_);
     this->set_pose_ = true;
+
+    // 打印Tcw_的值
+    Eigen::Matrix4d Tcw_mat = this->Tcw_.matrix();
+    std::cout << "Tcw_矩阵:\n";
+    for (int i = 0; i < 4; i++)
+    {
+        for (int j = 0; j < 4; j++)
+        {
+            std::cout << std::fixed << std::setprecision(6) << std::setw(12)
+                      << Tcw_mat(i, j) << " ";
+        }
+        std::cout << "\n";
+    }
+    std::cout << std::endl;
 }
 
 Sophus::SE3d GaussianKeyframe::getPose()
@@ -107,6 +121,8 @@ void GaussianKeyframe::setCameraParams(const Camera &camera)
         float focal_length_y = static_cast<float>(camera.params_[1]);
         this->FoVx_ = graphics_utils::focal2fov(focal_length_x, camera.width_);
         this->FoVy_ = graphics_utils::focal2fov(focal_length_y, camera.height_);
+        // std::cout << "FoVx_ " << FoVx_ << std::endl;
+        // std::cout << "FoVy_ " << FoVy_ << std::endl;
         this->set_camera_ = true;
     }
     break;
@@ -175,10 +191,13 @@ GaussianKeyframe::getWorld2View2(
 
     Eigen::Matrix4f C2W = Rt.inverse();
     Eigen::Vector3f cam_center = C2W.block<3, 1>(0, 3);
+    // std::cout << "trans: " << trans << std::endl;
+    // std::cout << "scale: " << scale << std::endl;
     cam_center += trans;
     cam_center *= scale;
     C2W.block<3, 1>(0, 3) = cam_center;
     Rt = C2W.inverse();
+    // std::cout<<"keyframe算的相机位姿逆置矩阵:\n" << Rt << std::endl;
     return Rt;
 }
 

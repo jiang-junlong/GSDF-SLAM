@@ -30,15 +30,17 @@ __device__ const float SH_C3[] = {-0.5900435899266435f, 2.890611442640554f,
                                   -0.4570457994644658f, 1.445305721320277f,
                                   -0.5900435899266435f};
 
-__forceinline__ __device__ float ndc2Pix(float v, int S) {
+__forceinline__ __device__ float ndc2Pix(float v, int S)
+{
   return ((v + 1.0) * S - 1.0) * 0.5;
 }
 
 __forceinline__ __device__ void getRect(const float2 p,
                                         int max_radius,
-                                        uint2& rect_min,
-                                        uint2& rect_max,
-                                        dim3 grid) {
+                                        uint2 &rect_min,
+                                        uint2 &rect_max,
+                                        dim3 grid)
+{
   rect_min = {min(grid.x, max((int)0, (int)((p.x - max_radius) / BLOCK_X))),
               min(grid.y, max((int)0, (int)((p.y - max_radius) / BLOCK_Y)))};
   rect_max = {
@@ -50,9 +52,10 @@ __forceinline__ __device__ void getRect(const float2 p,
 
 __forceinline__ __device__ void getRect(const float2 p,
                                         int2 ext_rect,
-                                        uint2& rect_min,
-                                        uint2& rect_max,
-                                        dim3 grid) {
+                                        uint2 &rect_min,
+                                        uint2 &rect_max,
+                                        dim3 grid)
+{
   rect_min = {min(grid.x, max((int)0, (int)((p.x - ext_rect.x) / BLOCK_X))),
               min(grid.y, max((int)0, (int)((p.y - ext_rect.y) / BLOCK_Y)))};
   rect_max = {
@@ -62,8 +65,9 @@ __forceinline__ __device__ void getRect(const float2 p,
           max((int)0, (int)((p.y + ext_rect.y + BLOCK_Y - 1) / BLOCK_Y)))};
 }
 
-__forceinline__ __device__ float3 transformPoint4x3(const float3& p,
-                                                    const float* matrix) {
+__forceinline__ __device__ float3 transformPoint4x3(const float3 &p,
+                                                    const float *matrix)
+{
   float3 transformed = {
       matrix[0] * p.x + matrix[4] * p.y + matrix[8] * p.z + matrix[12],
       matrix[1] * p.x + matrix[5] * p.y + matrix[9] * p.z + matrix[13],
@@ -72,8 +76,9 @@ __forceinline__ __device__ float3 transformPoint4x3(const float3& p,
   return transformed;
 }
 
-__forceinline__ __device__ float4 transformPoint4x4(const float3& p,
-                                                    const float* matrix) {
+__forceinline__ __device__ float4 transformPoint4x4(const float3 &p,
+                                                    const float *matrix)
+{
   float4 transformed = {
       matrix[0] * p.x + matrix[4] * p.y + matrix[8] * p.z + matrix[12],
       matrix[1] * p.x + matrix[5] * p.y + matrix[9] * p.z + matrix[13],
@@ -82,8 +87,9 @@ __forceinline__ __device__ float4 transformPoint4x4(const float3& p,
   return transformed;
 }
 
-__forceinline__ __device__ float3 transformVec4x3(const float3& p,
-                                                  const float* matrix) {
+__forceinline__ __device__ float3 transformVec4x3(const float3 &p,
+                                                  const float *matrix)
+{
   float3 transformed = {
       matrix[0] * p.x + matrix[4] * p.y + matrix[8] * p.z,
       matrix[1] * p.x + matrix[5] * p.y + matrix[9] * p.z,
@@ -93,7 +99,8 @@ __forceinline__ __device__ float3 transformVec4x3(const float3& p,
 }
 
 __forceinline__ __device__ float3
-transformVec4x3Transpose(const float3& p, const float* matrix) {
+transformVec4x3Transpose(const float3 &p, const float *matrix)
+{
   float3 transformed = {
       matrix[0] * p.x + matrix[1] * p.y + matrix[2] * p.z,
       matrix[4] * p.x + matrix[5] * p.y + matrix[6] * p.z,
@@ -102,7 +109,8 @@ transformVec4x3Transpose(const float3& p, const float* matrix) {
   return transformed;
 }
 
-__forceinline__ __device__ float dnormvdz(float3 v, float3 dv) {
+__forceinline__ __device__ float dnormvdz(float3 v, float3 dv)
+{
   float sum2 = v.x * v.x + v.y * v.y + v.z * v.z;
   float invsum32 = 1.0f / sqrt(sum2 * sum2 * sum2);
   float dnormvdz =
@@ -111,7 +119,8 @@ __forceinline__ __device__ float dnormvdz(float3 v, float3 dv) {
   return dnormvdz;
 }
 
-__forceinline__ __device__ float3 dnormvdv(float3 v, float3 dv) {
+__forceinline__ __device__ float3 dnormvdv(float3 v, float3 dv)
+{
   float sum2 = v.x * v.x + v.y * v.y + v.z * v.z;
   float invsum32 = 1.0f / sqrt(sum2 * sum2 * sum2);
 
@@ -128,7 +137,8 @@ __forceinline__ __device__ float3 dnormvdv(float3 v, float3 dv) {
   return dnormvdv;
 }
 
-__forceinline__ __device__ float4 dnormvdv(float4 v, float4 dv) {
+__forceinline__ __device__ float4 dnormvdv(float4 v, float4 dv)
+{
   float sum2 = v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w;
   float invsum32 = 1.0f / sqrt(sum2 * sum2 * sum2);
 
@@ -142,28 +152,36 @@ __forceinline__ __device__ float4 dnormvdv(float4 v, float4 dv) {
   return dnormvdv;
 }
 
-__forceinline__ __device__ float sigmoid(float x) {
+__forceinline__ __device__ float sigmoid(float x)
+{
   return 1.0f / (1.0f + expf(-x));
 }
 
 __forceinline__ __device__ bool in_frustum(int idx,
-                                           const float* orig_points,
-                                           const float* viewmatrix,
-                                           const float* projmatrix,
+                                           const float *orig_points,
+                                           const float *viewmatrix, // 位姿
+                                           const float *projmatrix,
                                            bool prefiltered,
-                                           float3& p_view) {
+                                           float3 &p_view)
+{
   float3 p_orig = {orig_points[3 * idx], orig_points[3 * idx + 1],
                    orig_points[3 * idx + 2]};
-
+  // if(idx== 0){
+  //   printf("打印viewmatrix:\n");
+  //   printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n", 
+  //           viewmatrix[0], viewmatrix[4], viewmatrix[8],  viewmatrix[12],
+  //           viewmatrix[1], viewmatrix[5], viewmatrix[9],  viewmatrix[13],
+  //           viewmatrix[2], viewmatrix[6], viewmatrix[10], viewmatrix[14],
+  //           viewmatrix[3], viewmatrix[7], viewmatrix[11], viewmatrix[15]);
+  // }
   // Bring points to screen space
-  float4 p_hom = transformPoint4x4(p_orig, projmatrix);
-  float p_w = 1.0f / (p_hom.w + 0.0000001f);
-  float3 p_proj = {p_hom.x * p_w, p_hom.y * p_w, p_hom.z * p_w};
   p_view = transformPoint4x3(p_orig, viewmatrix);
 
-  if (p_view.z <= 0.2f) {  // || ((p_proj.x < -1.3 || p_proj.x > 1.3 || p_proj.y
-                           // < -1.3 || p_proj.y > 1.3)))
-    if (prefiltered) {
+  if (p_view.z <= 0.2f)
+  { 
+    // printf("p_view: %f %f %f\np_orig: %f %f %f\n", p_view.x, p_view.y, p_view.z, p_orig.x, p_orig.y, p_orig.z);
+    if (prefiltered)
+    {
       printf(
           "Point is filtered although prefiltered is set. This shouldn't "
           "happen!");
@@ -171,14 +189,17 @@ __forceinline__ __device__ bool in_frustum(int idx,
     }
     return false;
   }
+  
   return true;
 }
 
 #define CHECK_CUDA(A, debug)                                                 \
   A;                                                                         \
-  if (debug) {                                                               \
+  if (debug)                                                                 \
+  {                                                                          \
     auto ret = cudaDeviceSynchronize();                                      \
-    if (ret != cudaSuccess) {                                                \
+    if (ret != cudaSuccess)                                                  \
+    {                                                                        \
       std::cerr << "\n[CUDA ERROR] in " << __FILE__ << "\nLine " << __LINE__ \
                 << ": " << cudaGetErrorString(ret);                          \
       throw std::runtime_error(cudaGetErrorString(ret));                     \

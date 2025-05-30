@@ -29,7 +29,6 @@ namespace dataparser
     torch::Tensor T_C0_L, T_C0_C2;
     void load_data() override
     {
-
       auto T_W_C0 = load_poses(pose_path_, false, 2)[0];                              // 加载位姿
       // std::cout << "T_W_C0: " << T_W_C0 << std::endl;
       TORCH_CHECK(T_W_C0.size(0) > 0);

@@ -1,7 +1,7 @@
 #include "cuda_colorize/colorize_pointcloud.h"
 
 __forceinline__ __device__ float3 transformPoint(const float3 &p,
-                                                    const float *matrix)
+                                                 const float *matrix)
 {
     float3 transformed = {
         matrix[0] * p.x + matrix[1] * p.y + matrix[2] * p.z + matrix[3],
@@ -16,7 +16,7 @@ __global__ void colorize_kernel(
     float3 *colors,              // 输出颜色数据 (N, 3)
     bool *valid_flags,           // 点是否有效的标记 (N)
     int num_points,              // 点云数量
-    const float *lidar_pose,     // LiDAR位姿 (行优先存储 4x4)          
+    const float *lidar_pose,     // LiDAR位姿 (行优先存储 4x4)
     const float *proj_mat,       // 相机投影矩阵 (行优先存储 3x4)
     const float *Tr_velo_to_cam, // 激光到相机的变换矩阵 (行优先存储 4x4)
     const float3 *image,         // 图像数据 (H, W, 3)
@@ -29,10 +29,10 @@ __global__ void colorize_kernel(
     if (idx >= num_points)
         return;
 
-    float3 p = points[idx];                              // 读取点云位置
-    float3 p_cam = transformPoint(p, Tr_velo_to_cam);    // LiDAR系 -> 相机坐标系
-    float3 p_proj = transformPoint(p_cam, proj_mat);     // 投影到像素坐标
-    if (p_proj.z <= 0.1f)
+    float3 p = points[idx];                           // 读取点云位置
+    float3 p_cam = transformPoint(p, Tr_velo_to_cam); // LiDAR系 -> 相机坐标系
+    float3 p_proj = transformPoint(p_cam, proj_mat);  // 投影到像素坐标
+    if (p_cam.z <= 0.2f)
     {
         valid_flags[idx] = false;
         return;
@@ -48,11 +48,11 @@ __global__ void colorize_kernel(
         return;
     }
 
-    float3 color = image[py * img_width + px];         // 获取图像颜色
-    float3 p_world = transformPoint(p, lidar_pose);    // LiDAR系 -> 世界坐标系
-    points[idx] = p_world;                             // 更新点云数据
-    colors[idx] = color;                               // 更新颜色
-    valid_flags[idx] = true;                           // 标记为有效
+    float3 color = image[py * img_width + px];          // 获取图像颜色
+    float3 p_world = transformPoint(p, lidar_pose);     // LiDAR系 -> 世界坐标系
+    points[idx] = p_world;                              // 更新点云数据
+    colors[idx] = color;                                // 更新颜色
+    valid_flags[idx] = true;                            // 标记为有效
 }
 
 void colorize_launcher(
@@ -69,16 +69,16 @@ void colorize_launcher(
     const int W = image.size(1);
 
     // 确保输入张量在CUDA设备上
-    if(points.is_cuda() == false) points = points.to(torch::kCUDA);
-    if(colors.is_cuda() == false) colors = colors.to(torch::kCUDA);
+    if (points.is_cuda() == false)
+        points = points.to(torch::kCUDA);
+    if (colors.is_cuda() == false)
+        colors = colors.to(torch::kCUDA);
     torch::Tensor proj_mat = proj.to(torch::kCUDA);
     torch::Tensor Tr_velo_to_cam = Tr.to(torch::kCUDA);
     torch::Tensor lidar_pose = pose.to(torch::kCUDA);
-    
 
     // 创建valid_flags用于标记有效的点
     torch::Tensor valid_flags = torch::zeros({N}, torch::kBool).to(torch::kCUDA);
-
 
     // CUDA内核的线程配置
     const dim3 threads(256);

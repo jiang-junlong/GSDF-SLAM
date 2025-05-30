@@ -7,6 +7,7 @@
 #include "submodules/utils/bin_utils/endian.h"
 #include "submodules/utils/ray_utils/ray_utils.h"
 #include "submodules/data_loader/data_parsers/kitti_parser.hpp"
+#include "submodules/data_loader/data_parsers/oxford_spires_parser.hpp"
 #include "submodules/utils/ply_utils/ply_utils_pcl.h"
 #include "submodules/utils/ply_utils/ply_utils_torch.h"
 #include <pcl/visualization/pcl_visualizer.h>
@@ -32,6 +33,9 @@ namespace dataloader
     {
     case DatasetType::Kitti:
       dataparser_ptr_ = std::make_shared<dataparser::Kitti>(dataset_path, device_, _preload, _res_scale);
+      break;
+    case DatasetType::Spires:
+      dataparser_ptr_ = std::make_shared<dataparser::Spires>(dataset_path, device_, _preload, _res_scale);
       break;
     default:
       throw std::runtime_error("Unsupported dataset type");
@@ -120,8 +124,8 @@ namespace dataloader
     }
 
     cam_pose = get_pose(idx, dataparser::DataType::RawColor).to(device_);
-    // 读取图像并归一化
     std::string imgfile = dataparser_ptr_->dataset_path_ / dataparser_ptr_->get_file(idx, dataparser::DataType::RawColor);
+    // std::cout << "Image file: " << imgfile << std::endl;
     image = cv::imread(imgfile, cv::IMREAD_COLOR); // 直接读取为 RGB 格式
     if (image.empty())
     {
@@ -131,27 +135,39 @@ namespace dataloader
     image.convertTo(image, CV_32FC3, 1.0f / 255.0f);
     torch::Tensor image_tensor = torch::from_blob(image.data, {image.rows, image.cols, 3}, torch::kFloat32).to(device_);
 
-    // 读取点云数据 (.bin 文件)
     torch::Tensor lidar_pose = get_pose(idx, dataparser::DataType::RawDepth).to(device_);
     std::string infile = dataparser_ptr_->dataset_path_ / dataparser_ptr_->get_file(idx, dataparser::DataType::RawDepth);
-    std::ifstream input(infile.c_str(), std::ios::in | std::ios::binary);
-    if (!input)
+    // std::cout << "Point cloud file: " << infile << std::endl;
+    pcl::PointCloud<pcl::PointXYZ> points;
+    // 读取点云数据 (支持 .bin, .ply, .pcd)
+    if (infile.find(".bin") != std::string::npos)
     {
-      std::cerr << "Could not read file: " << infile << "\n";
-      return false;
-    }
+      std::ifstream input(infile.c_str(), std::ios::in | std::ios::binary);
+      if (!input)
+      {
+        std::cerr << "Could not read file: " << infile << "\n";
+        return false;
+      }
 
-    const size_t kMaxNumberOfPoints = 1e6; // 最大点数
-    std::vector<pcl::PointXYZ> points;
-    points.reserve(kMaxNumberOfPoints);
-    pcl::PointXYZ point;
-    while (input.read(reinterpret_cast<char *>(&point.x), 3 * sizeof(float)) && !input.eof())
-    {
-      float intensity;
-      input.read(reinterpret_cast<char *>(&intensity), sizeof(float));
-      points.push_back(point);
+      const size_t kMaxNumberOfPoints = 1e6; // 最大点数
+      points.reserve(kMaxNumberOfPoints);
+      pcl::PointXYZ point;
+      while (input.read(reinterpret_cast<char *>(&point.x), 3 * sizeof(float)) && !input.eof())
+      {
+        float intensity;
+        input.read(reinterpret_cast<char *>(&intensity), sizeof(float));
+        points.push_back(point);
+      }
+      input.close();
     }
-    input.close();
+    else if (infile.find(".ply") != std::string::npos)
+    {
+      ply_utils::read_ply_file(infile, points);
+    }
+    else if (infile.find(".pcd") != std::string::npos)
+    {
+      pcl::io::loadPCDFile<pcl::PointXYZ>(infile, points);
+    }
 
     point_cloud = torch::zeros({points.size(), 3}, torch::kFloat32).to(device_);
     color = torch::zeros({points.size(), 3}, torch::kFloat32).to(device_);
@@ -165,46 +181,145 @@ namespace dataloader
     // 投影矩阵和变换矩阵直接传递
     Eigen::Matrix<float, 4, 4, Eigen::RowMajor> Tr = dataparser_ptr_->Tr;
     Eigen::Matrix<float, 3, 4, Eigen::RowMajor> P = dataparser_ptr_->P;
+    // std::cout << "Tr: " << Tr << std::endl;
+    // std::cout << "P: " << P << std::endl;
     torch::Tensor proj_mat = torch::from_blob(P.data(), {12}, torch::kFloat32).to(device_);
     torch::Tensor Tr_velo_to_cam = torch::from_blob(Tr.data(), {16}, torch::kFloat32).to(device_);
-    // 处理点云着色（并行化，批量处理）
+    // 点云着色（并行化，批量处理）
     colorize_launcher(point_cloud, color, proj_mat, Tr_velo_to_cam, lidar_pose, image_tensor);
 
+    // torch::Tensor cam_inv = cam_pose.inverse();
+    // std::cout << "相机位姿的逆为:\n " << cam_inv << std::endl;
     // 用以显示点云，查看染色结果是否正确
-    // if (point_cloud.device().is_cuda())
-    //   point_cloud = point_cloud.cpu();
-    // if (color.device().is_cuda())
-    //   color = color.cpu();
+    if (false)
+    {
+      pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("Viewer"));
+      viewer->setBackgroundColor(0, 0, 0);
+      viewer->initCameraParameters();
+      viewer->addCoordinateSystem(1.0);
 
-    // const int N = point_cloud.size(0);
-    // auto pcl_cloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
-    // pcl_cloud->points.resize(N);
-    // pcl_cloud->width = N;
-    // pcl_cloud->height = 1;
-    // pcl_cloud->is_dense = false;
-    // pcl::visualization::PCLVisualizer viewer("Viewer");
-    // viewer.setBackgroundColor(0, 0, 0);
-    // viewer.initCameraParameters();
-    // viewer.addCoordinateSystem(1.0);
-    // for (int i = 0; i < N; ++i)
-    // {
-    //   pcl::PointXYZRGB pt;
-    //   pt.x = point_cloud[i][0].item<float>();
-    //   pt.y = point_cloud[i][1].item<float>();
-    //   pt.z = point_cloud[i][2].item<float>();
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud_raw(new pcl::PointCloud<pcl::PointXYZRGB>());
+      pcl_cloud_raw->points.reserve(points.size());
+      for (const auto &pt : points)
+      {
+        pcl::PointXYZRGB p;
+        p.x = pt.x;
+        p.y = pt.y;
+        p.z = pt.z;
+        p.r = 255;
+        p.g = 0;
+        p.b = 0;
+        pcl_cloud_raw->points.push_back(p);
+      }
+      pcl_cloud_raw->width = pcl_cloud_raw->points.size();
+      pcl_cloud_raw->height = 1;
+      pcl_cloud_raw->is_dense = false;
+      viewer->addPointCloud<pcl::PointXYZRGB>(pcl_cloud_raw, "raw_cloud");
+      viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "raw_cloud");
 
-    //   pt.r = static_cast<uint8_t>(color[i][0].item<float>() * 255.0f);
-    //   pt.g = static_cast<uint8_t>(color[i][1].item<float>() * 255.0f);
-    //   pt.b = static_cast<uint8_t>(color[i][2].item<float>() * 255.0f);
+      if (point_cloud.device().is_cuda())
+        point_cloud = point_cloud.cpu();
+      if (color.device().is_cuda())
+        color = color.cpu();
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+      pcl_cloud->points.reserve(point_cloud.size(0));
+      for (int i = 0; i < point_cloud.size(0); ++i)
+      {
+        pcl::PointXYZRGB pt;
+        pt.x = point_cloud[i][0].item<float>();
+        pt.y = point_cloud[i][1].item<float>();
+        pt.z = point_cloud[i][2].item<float>();
+        pt.r = static_cast<uint8_t>(color[i][0].item<float>() * 255.0f);
+        pt.g = static_cast<uint8_t>(color[i][1].item<float>() * 255.0f);
+        pt.b = static_cast<uint8_t>(color[i][2].item<float>() * 255.0f);
+        pcl_cloud->points.push_back(pt);
+      }
+      pcl_cloud->width = pcl_cloud->points.size();
+      pcl_cloud->height = 1;
+      pcl_cloud->is_dense = false;
+      viewer->addPointCloud<pcl::PointXYZRGB>(pcl_cloud, "colored_cloud");
+      viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "colored_cloud");
 
-    //   pcl_cloud->points[i] = pt;
-    // }
-    // if (!viewer.updatePointCloud(pcl_cloud, "colored_cloud"))
-    // {
-    //   viewer.addPointCloud(pcl_cloud, "colored_cloud");
-    // }
+      torch::Tensor rotation = cam_pose.narrow(0, 0, 3).narrow(1, 0, 3);    // 3x3 旋转矩阵
+      torch::Tensor translation = cam_pose.narrow(0, 0, 3).narrow(1, 3, 1); // 3x1 位移向量
 
-    // viewer.spin();
+      // 将相机位姿转换为 Eigen 类型用于 PCL 可视化
+      Eigen::Matrix4f T_camera = Eigen::Matrix4f::Identity();
+      for (int i = 0; i < 3; ++i)
+      {
+        for (int j = 0; j < 3; ++j)
+        {
+          T_camera(i, j) = rotation[i][j].item<float>();
+        }
+        T_camera(i, 3) = translation[i].item<float>();
+      }
+      Eigen::Vector3f camera_position = T_camera.block<3, 1>(0, 3); // 相机位置
+      Eigen::Vector3f x_axis = camera_position + 0.5f * T_camera.block<3, 1>(0, 0);
+      Eigen::Vector3f y_axis = camera_position + 0.5f * T_camera.block<3, 1>(0, 1);
+      Eigen::Vector3f z_axis = camera_position + 0.5f * T_camera.block<3, 1>(0, 2);
+
+      torch::Tensor rotation_ = lidar_pose.narrow(0, 0, 3).narrow(1, 0, 3);    // 3x3 旋转矩阵
+      torch::Tensor translation_ = lidar_pose.narrow(0, 0, 3).narrow(1, 3, 1); // 3x1 位移向量
+      Eigen::Matrix4f T_lidar = Eigen::Matrix4f::Identity();
+      for (int i = 0; i < 3; ++i)
+      {
+        for (int j = 0; j < 3; ++j)
+        {
+          T_lidar(i, j) = rotation_[i][j].item<float>();
+        }
+        T_lidar(i, 3) = translation_[i].item<float>();
+      }
+      Eigen::Vector3f lidar_position = T_lidar.block<3, 1>(0, 3); // 相机位置
+      Eigen::Vector3f x_axis_ = lidar_position + 0.5f * T_lidar.block<3, 1>(0, 0);
+      Eigen::Vector3f y_axis_ = lidar_position + 0.5f * T_lidar.block<3, 1>(0, 1);
+      Eigen::Vector3f z_axis_ = lidar_position + 0.5f * T_lidar.block<3, 1>(0, 2);
+
+      viewer->addLine<pcl::PointXYZ>(pcl::PointXYZ(camera_position.x(), camera_position.y(), camera_position.z()),
+                                     pcl::PointXYZ(x_axis.x(), x_axis.y(), x_axis.z()), 1.0, 0.0, 0.0, "x_axis");
+      viewer->addLine<pcl::PointXYZ>(pcl::PointXYZ(camera_position.x(), camera_position.y(), camera_position.z()),
+                                     pcl::PointXYZ(y_axis.x(), y_axis.y(), y_axis.z()), 0.0, 1.0, 0.0, "y_axis");
+      viewer->addLine<pcl::PointXYZ>(pcl::PointXYZ(camera_position.x(), camera_position.y(), camera_position.z()),
+                                     pcl::PointXYZ(z_axis.x(), z_axis.y(), z_axis.z()), 0.0, 0.0, 1.0, "z_axis");
+
+      viewer->addLine<pcl::PointXYZ>(pcl::PointXYZ(lidar_position.x(), lidar_position.y(), lidar_position.z()),
+                                     pcl::PointXYZ(x_axis_.x(), x_axis_.y(), x_axis_.z()), 1.0, 0.0, 0.0, "x_axis_");
+      viewer->addLine<pcl::PointXYZ>(pcl::PointXYZ(lidar_position.x(), lidar_position.y(), lidar_position.z()),
+                                     pcl::PointXYZ(y_axis_.x(), y_axis_.y(), y_axis_.z()), 0.0, 1.0, 0.0, "y_axis_");
+      viewer->addLine<pcl::PointXYZ>(pcl::PointXYZ(lidar_position.x(), lidar_position.y(), lidar_position.z()),
+                                     pcl::PointXYZ(z_axis_.x(), z_axis_.y(), z_axis_.z()), 0.0, 0.0, 1.0, "z_axis_");
+
+      // 把染色后的点云转到相机坐标系下
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud_in_cam(new pcl::PointCloud<pcl::PointXYZRGB>());
+      pcl_cloud_in_cam->points.reserve(pcl_cloud->points.size());
+
+      Eigen::Matrix4f T_world_to_cam = T_camera.inverse(); // 世界坐标系 -> 相机坐标系变换
+
+      for (const auto &pt : pcl_cloud->points)
+      {
+        Eigen::Vector4f p_world(pt.x, pt.y, pt.z, 1.0f);
+        Eigen::Vector4f p_cam = T_world_to_cam * p_world;
+
+        pcl::PointXYZRGB p_cam_pt;
+        p_cam_pt.x = p_cam.x();
+        p_cam_pt.y = p_cam.y();
+        p_cam_pt.z = p_cam.z();
+        p_cam_pt.r = pt.r;
+        p_cam_pt.g = pt.g;
+        p_cam_pt.b = pt.b;
+
+        pcl_cloud_in_cam->points.push_back(p_cam_pt);
+      }
+
+      pcl_cloud_in_cam->width = pcl_cloud_in_cam->points.size();
+      pcl_cloud_in_cam->height = 1;
+      pcl_cloud_in_cam->is_dense = false;
+
+      viewer->addPointCloud<pcl::PointXYZRGB>(pcl_cloud_in_cam, "cloud_in_cam");
+      viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "cloud_in_cam");
+
+      viewer->spin();
+    }
+
     return true;
   }
 

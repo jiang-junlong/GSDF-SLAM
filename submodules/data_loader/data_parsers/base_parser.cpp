@@ -469,8 +469,8 @@ void DataParser::load_colors(const std::string &file_extension,
   if (!eval) {
     assert(std::filesystem::exists(color_path_));
     load_file_list(color_path_, raw_color_filelists_, prefix, file_extension);
-    align_pose_sensor(raw_color_filelists_, color_poses_,
-                      k_max_time_diff_camera_and_pose);
+    // align_pose_sensor(raw_color_filelists_, color_poses_,
+    //                   k_max_time_diff_camera_and_pose);
     int raw_color_num = raw_color_filelists_.size();
 
     int train_color_num;
@@ -529,8 +529,8 @@ void DataParser::load_depths(const std::string &file_extension,
   if (!eval) {
     assert(std::filesystem::exists(depth_path_));
     load_file_list(depth_path_, raw_depth_filelists_, prefix, file_extension);
-    align_pose_sensor(raw_depth_filelists_, depth_poses_,
-                      k_max_time_diff_lidar_and_pose);
+    // align_pose_sensor(raw_depth_filelists_, depth_poses_,
+    //                   k_max_time_diff_lidar_and_pose);
     int raw_depth_num = raw_depth_filelists_.size();
 
     int train_depth_num;

@@ -64,9 +64,10 @@ RasterizeGaussiansCUDA(
   }
 
   const int P = means3D.size(0); // 点数
+  // std::cout << "高斯的个数为: " << P << std::endl;
   const int H = image_height;
   const int W = image_width;
-
+  // std::cout << "图像的宽高为: " << W << " " << H << std::endl;
   auto int_opts = means3D.options().dtype(torch::kInt32);
   auto float_opts = means3D.options().dtype(torch::kFloat32);
 

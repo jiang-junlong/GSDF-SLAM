@@ -16,11 +16,13 @@ set(CMAKE_CUDA_STANDARD 17)
 # set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fsanitize=address")
 
 set(CAFFE2_USE_CUDNN on)
+set(Torch_DIR /home/jiang/envs/libtorch-cu118/share/cmake/Torch)
 find_package(Torch REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV 4 REQUIRED)
 find_package(jsoncpp REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 find_package(OpenGL REQUIRED)
 find_package(glm REQUIRED)
@@ -45,7 +47,7 @@ include_directories(
 ##  Build the gaussian splatting component libraries to ${PROJECT_SOURCE_DIR}/lib
 ##################################################################################
 
-add_library(simple_knn SHARED
+add_library(simple_knn STATIC
     submodules/simple-knn/simple_knn.cu
     submodules/simple-knn/simple_knn.h
     submodules/simple-knn/spatial.cu
@@ -53,7 +55,7 @@ add_library(simple_knn SHARED
 # target_compile_features(simple_knn PUBLIC cxx_std_17)
 target_link_libraries(simple_knn "${TORCH_LIBRARIES}")
 
-add_library(cuda_rasterizer SHARED
+add_library(cuda_rasterizer STATIC
     include/operate_points.h
     src/operate_points.cu
     include/rasterize_points.h
@@ -84,7 +86,7 @@ target_link_libraries(cuda_rasterizer
 ##  Build the ImGui library to ${PROJECT_SOURCE_DIR}/lib
 ##################################################################################
 
-add_library(imgui SHARED
+add_library(imgui STATIC
     viewer/imgui/imconfig.h
     viewer/imgui/imgui_demo.cpp
     viewer/imgui/imgui_draw.cpp
@@ -106,10 +108,15 @@ target_link_libraries(imgui glfw OpenGL::GL)
 ##################################################################################
 ##  Build the gaussian mapper library to ${PROJECT_SOURCE_DIR}/lib
 ##################################################################################
+add_library(ply_utils submodules/utils/ply_utils/ply_utils_pcl.cpp
+                      submodules/utils/ply_utils/ply_utils_torch.cpp)
+target_link_libraries(ply_utils  
+                      ${PCL_LIBRARIES}
+                      ${TORCH_LIBRARIES}
+                      )
 
-add_library(gaussian_mapper SHARED
-    submodules/tinyply/tinyply.h
-    submodules/tinyply/tinyply.cpp
+
+add_library(gaussian_mapper STATIC
     include/gaussian_keyframe.h
     include/gaussian_model.h
     include/gaussian_parameters.h
@@ -140,13 +147,15 @@ target_link_libraries(gaussian_mapper
     "${TORCH_LIBRARIES}"
     Eigen3::Eigen
     simple_knn
-    cuda_rasterizer)
+    cuda_rasterizer
+    ply_utils
+    )
 
 ##################################################################################
 ##  Build the viewer library to ${PROJECT_SOURCE_DIR}/lib
 ##################################################################################
 
-add_library(gaussian_viewer SHARED
+add_library(gaussian_viewer STATIC
     viewer/drawer_utils.h
     viewer/imgui_viewer.cpp
     viewer/imgui_viewer.h
@@ -165,16 +174,12 @@ target_link_libraries(gaussian_viewer
 ##################################################################################
 # Dataloader
 ##################################################################################
-add_library(ply_utils submodules/utils/ply_utils/ply_utils_pcl.cpp
-                      submodules/utils/ply_utils/ply_utils_torch.cpp)
-target_link_libraries(ply_utils  
-                      ${PCL_LIBRARIES}
-                      ${TORCH_LIBRARIES}
-                      )
+
 add_library(data_parser submodules/data_loader/data_parsers/base_parser.cpp
                         submodules/params/params.cpp
-                        submodules/utils/utils.cpp)
-target_link_libraries(data_parser ${TORCH_LIBRARIES} ply_utils ${OpenCV_LIBS} ${catkin_LIBRARIES})
+                        submodules/utils/utils.cpp
+                        )
+target_link_libraries(data_parser ${TORCH_LIBRARIES} ply_utils ${OpenCV_LIBS} ${catkin_LIBRARIES} yaml-cpp)
 
 add_library(ray_utils submodules/utils/ray_utils/ray_utils.cpp)
 target_link_libraries(ray_utils ${TORCH_LIBRARIES})
@@ -189,7 +194,7 @@ target_link_libraries(data_loader data_parser ray_utils cuda_colorize)
 ##  toolbox
 ##################################################################################
 
-add_library(cuda_colorize SHARED
+add_library(cuda_colorize STATIC
     cuda_colorize/colorize_pointcloud.h
     cuda_colorize/colorize_pointcloud.cu
 )

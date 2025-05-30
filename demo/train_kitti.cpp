@@ -62,9 +62,11 @@ int main(int argc, char **argv)
         device_type = torch::kCPU;
     }
 
-    std::string dataset_path = "/home/uav/myproject/GSDF-SLAM/dataset/kitti_04/04";
-    std::string gaussian_cfg_path = "/home/uav/myproject/GSDF-SLAM/cfg/colmap/gaussian_splatting.yaml";
-    std::string output_dir = "/home/uav/myproject/GSDF-SLAM/result/kitti/04";
+    // std::string dataset_path = "/home/jiang/myproject/GSDF-SLAM/dataset/kitti_04/04";
+    // std::string output_dir = "/home/jiang/myproject/GSDF-SLAM/result/kitti_04/04";
+    std::string dataset_path = "/home/jiang/myproject/GSDF-SLAM/dataset/Oxford-Spires-Dataset/2024-03-12-keble-college-02";
+    std::string output_dir = "/home/jiang/myproject/GSDF-SLAM/result/Oxford-Spires-Dataset/2024-03-12-keble-college-02";
+    std::string gaussian_cfg_path = "/home/jiang/myproject/GSDF-SLAM/cfg/colmap/gaussian_splatting.yaml";
 
     // Create GaussianMapper
     // std::filesystem::path gaussian_cfg_path(argv[1]);

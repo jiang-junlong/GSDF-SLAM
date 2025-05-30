@@ -26,7 +26,8 @@
 
 #include "submodules/Sophus/sophus/se3.hpp"
 #include "submodules/simple-knn/spatial.h"
-#include "submodules/tinyply/tinyply.h"
+#include "submodules/utils/ply_utils/tinyply.h"
+
 #include "types.h"
 #include "operate_points.h"
 #include "general_utils.h"

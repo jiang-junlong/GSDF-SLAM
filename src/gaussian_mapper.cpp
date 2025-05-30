@@ -1,21 +1,3 @@
-/**
- * This file is part of Photo-SLAM
- *
- * Copyright (C) 2023-2024 Longwei Li and Hui Cheng, Sun Yat-sen University.
- * Copyright (C) 2023-2024 Huajian Huang and Sai-Kit Yeung, Hong Kong University of Science and Technology.
- *
- * Photo-SLAM is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
- * License as published by the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Photo-SLAM is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
- * the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with Photo-SLAM.
- * If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include "include/gaussian_mapper.h"
 
 GaussianMapper::GaussianMapper(
@@ -68,11 +50,11 @@ GaussianMapper::GaussianMapper(
 
     override_color_ = torch::empty(0, torch::TensorOptions().device(device_type_));
 
-    // Initialize scene and model  初始化场景和模型
+    // 初始化场景和模型
     gaussians_ = std::make_shared<GaussianModel>(model_params_);
     scene_ = std::make_shared<GaussianScene>(model_params_);
 
-    dataloader_ptr_ = std::make_unique<dataloader::DataLoader>(dataset_path, 3, device_type_);
+    dataloader_ptr_ = std::make_unique<dataloader::DataLoader>(dataset_path, 5, device_type_);
 }
 
 void GaussianMapper::readConfigFromFile(std::filesystem::path cfg_path)
@@ -98,18 +80,10 @@ void GaussianMapper::readConfigFromFile(std::filesystem::path cfg_path)
     z_far_ = settings_file["Camera.z_far"].operator float();
 
     monocular_inactive_geo_densify_max_pixel_dist_ = settings_file["Monocular.inactive_geo_densify_max_pixel_dist"].operator float();
-    stereo_min_disparity_ = settings_file["Stereo.min_disparity"].operator int();
-    stereo_num_disparity_ = settings_file["Stereo.num_disparity"].operator int();
-    RGBD_min_depth_ = settings_file["RGBD.min_depth"].operator float();
-    RGBD_max_depth_ = settings_file["RGBD.max_depth"].operator float();
-
     inactive_geo_densify_ = (settings_file["Mapper.inactive_geo_densify"].operator int()) != 0;
     max_depth_cached_ = settings_file["Mapper.depth_cache"].operator int();
     min_num_initial_map_kfs_ = static_cast<unsigned long>(settings_file["Mapper.min_num_initial_map_kfs"].operator int());
     new_keyframe_times_of_use_ = settings_file["Mapper.new_keyframe_times_of_use"].operator int();
-    local_BA_increased_times_of_use_ = settings_file["Mapper.local_BA_increased_times_of_use"].operator int();
-    loop_closure_increased_times_of_use_ = settings_file["Mapper.loop_closure_increased_times_of_use_"].operator int();
-    cull_keyframes_ = (settings_file["Mapper.cull_keyframes"].operator int()) != 0;
     large_rot_th_ = settings_file["Mapper.large_rotation_threshold"].operator float();
     large_trans_th_ = settings_file["Mapper.large_translation_threshold"].operator float();
     stable_num_iter_existence_ = settings_file["Mapper.stable_num_iter_existence"].operator int();
@@ -254,14 +228,31 @@ void GaussianMapper::run()
         new_kf->znear_ = z_near_;
         // Camera &camera = scene_->cameras_.at(i);
         new_kf->setCameraParams(camera); // 设置相机参数
-        new_kf->setPose(cam_pose);       // 设置位姿
-        this->position_ = new_kf->t_;
+        // std::cout << "相机位姿\n" << cam_pose << std::endl;
+        torch::Tensor cam_inv = cam_pose.inverse();
+        new_kf->setPose(cam_inv); // 设置位姿
+        // 格式化打印tensor
+        // std::cout << "相机位姿的逆为:\n";
+        // for (int i = 0; i < 4; i++)
+        // {
+        //     for (int j = 0; j < 4; j++)
+        //     {
+        //         std::cout << std::fixed << std::setprecision(6) << std::setw(12)
+        //                   << cam_inv[i][j].item<float>() << " ";
+        //     }
+        //     std::cout << "\n";
+        // }
+        // std::cout << std::endl;
+        // this->position_ = new_kf->t_;
+        this->position_[0] = cam_pose[0][3].item<float>();
+        this->position_[1] = cam_pose[1][3].item<float>();
+        this->position_[2] = cam_pose[2][3].item<float>();
         new_kf->original_image_ = tensor_utils::cvMat2TorchTensor_Float32(image, device_type_);
         new_kf->img_filename_ = std::to_string(i);
         new_kf->gaus_pyramid_height_ = camera.gaus_pyramid_height_;
         new_kf->gaus_pyramid_width_ = camera.gaus_pyramid_width_;
         new_kf->gaus_pyramid_times_of_use_ = kf_gaus_pyramid_times_of_use_;
-        new_kf->computeTransformTensors();
+        new_kf->computeTransformTensors(); // 将刚才的位姿变成tensor
         scene_->addKeyframe(new_kf, &kfid_shuffled_);
         new_kf->img_undist_ = image.clone();
 
@@ -381,10 +372,17 @@ void GaussianMapper::trainForOneIteration_ours()
 
     // 用于调试
     // cv::Mat rendered_image_mat = tensor_utils::torchTensor2CvMat_Float32(rendered_image);
+    // for (int i = 0; i < rendered_image_mat.rows; i++)
+    // {
+    //     for (int j = 0; j < rendered_image_mat.cols; j++)
+    //     {
+    //         std::cout << rendered_image_mat.at<float>(i, j) << " ";
+    //     }
+    // }
     // cv::imshow("rendered_image", rendered_image_mat);
     // cv::Mat gt_image_mat = tensor_utils::torchTensor2CvMat_Float32(gt_image);
     // cv::imshow("gt_image", gt_image_mat);
-    // cv::waitKey(1);
+    // cv::waitKey(0);
 
     auto viewspace_point_tensor = std::get<1>(render_pkg);
     auto visibility_filter = std::get<2>(render_pkg);
@@ -395,6 +393,7 @@ void GaussianMapper::trainForOneIteration_ours()
     auto Ll1 = loss_utils::l1_loss(masked_image, gt_image); // 计算L1 loss
     float lambda_dssim = lambdaDssim();
     auto loss = (1.0 - lambda_dssim) * Ll1 + lambda_dssim * (1.0 - loss_utils::ssim(masked_image, gt_image, device_type_));
+    // std::cout << "loss: " << loss.item().toFloat() << std::endl;
     loss.backward(); // 反向传播
 
     torch::cuda::synchronize(); // 等待GPU完成所有任务
@@ -853,84 +852,6 @@ void GaussianMapper::increasePcdByKeyframeInactiveGeoDensify(
 
         torch::Tensor points3D_valid = points3D.index({point_valid_flags});
         torch::Tensor colors_valid = colors.index({point_valid_flags});
-
-        // Transform points to the world coordinate
-        torch::Tensor Twc_tensor =
-            tensor_utils::EigenMatrix2TorchTensor(
-                Twc.matrix(), device_type_)
-                .transpose(0, 1);
-        transformPoints(points3D_valid, Twc_tensor);
-
-        // Add new points to the cache
-        if (depth_cached_ == 0)
-        {
-            depth_cache_points_ = points3D_valid;
-            depth_cache_colors_ = colors_valid;
-        }
-        else
-        {
-            depth_cache_points_ = torch::cat({depth_cache_points_, points3D_valid}, /*dim=*/0);
-            depth_cache_colors_ = torch::cat({depth_cache_colors_, colors_valid}, /*dim=*/0);
-        }
-        // savePly(result_dir_ / (std::to_string(getIteration()) + "_" + std::to_string(pkf->fid_) + "_1_after_inactive_geo_densify"));
-    }
-    break;
-    case RGBD:
-    {
-        // savePly(result_dir_ / (std::to_string(getIteration()) + "_" + std::to_string(pkf->fid_) + "_0_before_inactive_geo_densify"));
-        cv::cuda::GpuMat img_rgb_gpu, img_depth_gpu;
-        img_rgb_gpu.upload(pkf->img_undist_);
-        img_depth_gpu.upload(pkf->img_auxiliary_undist_);
-
-        // From cv::cuda::GpuMat to torch::Tensor
-        torch::Tensor rgb = tensor_utils::cvGpuMat2TorchTensor_Float32(img_rgb_gpu);
-        rgb = rgb.permute({1, 2, 0}).flatten(0, 1).contiguous();
-        torch::Tensor depth = tensor_utils::cvGpuMat2TorchTensor_Float32(img_depth_gpu);
-        depth = depth.flatten(0, 1).contiguous();
-
-        // To clear undisired and unreliable depth
-        torch::Tensor point_valid_flags = torch::full(
-            {depth.size(0)}, false /*true*/, torch::TensorOptions().dtype(torch::kBool).device(device_type_));
-        int nkps_twice = pkf->kps_pixel_.size();
-        int width = pkf->image_width_;
-        for (int kpidx = 0; kpidx < nkps_twice; kpidx += 2)
-        {
-            int idx = static_cast<int>(/*u*/ pkf->kps_pixel_[kpidx]) + static_cast<int>(/*v*/ pkf->kps_pixel_[kpidx + 1]) * width;
-            point_valid_flags[idx] = true;
-        }
-        point_valid_flags = torch::logical_and(
-            point_valid_flags,
-            torch::where(depth > RGBD_min_depth_, true, false));
-        point_valid_flags = torch::logical_and(
-            point_valid_flags,
-            torch::where(depth < RGBD_max_depth_, true, false));
-
-        torch::Tensor colors_valid = rgb.index({point_valid_flags});
-
-        // Reproject to get 3D points
-        torch::Tensor points3D_valid;
-        Camera &camera = scene_->cameras_.at(pkf->camera_id_);
-        switch (camera.model_id_)
-        {
-        case Camera::PINHOLE:
-        {
-            points3D_valid = reprojectDepthPinhole(
-                depth, point_valid_flags, pkf->intr_, pkf->image_width_);
-        }
-        break;
-        case Camera::FISHEYE:
-        {
-            // TODO: support fisheye camera?
-            throw std::runtime_error("[Gaussian Mapper]Fisheye cameras are not supported currently!");
-        }
-        break;
-        default:
-        {
-            throw std::runtime_error("[Gaussian Mapper]Invalid camera model!");
-        }
-        break;
-        }
-        points3D_valid = points3D_valid.index({point_valid_flags});
 
         // Transform points to the world coordinate
         torch::Tensor Twc_tensor =

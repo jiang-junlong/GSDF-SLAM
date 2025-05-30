@@ -241,6 +241,7 @@ __global__ void preprocessCUDA(int P, // 三维高斯的总数
   float3 p_view;
   if (!in_frustum(idx, orig_points, viewmatrix, projmatrix, prefiltered,
                   p_view))
+    // printf("Gaussian %d is outside of frustum\n", idx);
     return;
 
   // Transform point by projecting

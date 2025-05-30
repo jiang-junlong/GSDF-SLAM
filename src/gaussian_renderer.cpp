@@ -63,8 +63,9 @@ GaussianRenderer::render(
         pc->active_sh_degree_,
         viewpoint_camera->camera_center_,
         false,
-        false
+        true
     );
+    // std::cout << "world view transform: " << viewpoint_camera->world_view_transform_ << std::endl;
 
     GaussianRasterizer rasterizer(raster_settings);
 

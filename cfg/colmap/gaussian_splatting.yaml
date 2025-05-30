@@ -14,7 +14,7 @@ Model.eval: 0  # 0:false, 1 or other integer:true
 #--------------------------------------------------------------------------------------------
 
 Camera.z_near: 0.01
-Camera.z_far: 200.0
+Camera.z_far: 500.0
 Monocular.inactive_geo_densify_max_pixel_dist: 0.0 # NOT used
 Stereo.min_disparity: 0 # NOT used
 Stereo.num_disparity: 0 # NOT used
@@ -32,7 +32,7 @@ Mapper.large_rotation_threshold: 0.0 # NOT used
 Mapper.large_translation_threshold: 0.0 # NOT used
 Mapper.stable_num_iter_existence: 0 # NOT used
 
-GausPyramid.do: 1  # 0:false, 1 or other integer:true
+GausPyramid.do: 0  # 0:false, 1 or other integer:true
 GausPyramid.num_sub_levels: 3
 GausPyramid.sub_level_times_of_use: 8
 
@@ -77,8 +77,8 @@ Optimization.densify_grad_threshold: 0.0002
 # Viewer Parameters
 #--------------------------------------------------------------------------------------------
 
-GaussianViewer.glfw_window_width: 1800  #1400
-GaussianViewer.glfw_window_height: 1050
+GaussianViewer.glfw_window_width: 1440  #1400
+GaussianViewer.glfw_window_height: 1080
 GaussianViewer.image_scale: 0.5
 GaussianViewer.image_scale_main: 1.0
 GaussianViewer.camera_watch_dist: 0.000001

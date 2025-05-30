@@ -96,7 +96,6 @@ struct VariableParameters
 class GaussianMapper
 {
 public:
-
     GaussianMapper(
         std::filesystem::path dataset_path,
         std::filesystem::path gaussian_config_file_path,
@@ -107,7 +106,6 @@ public:
     void readConfigFromFile(std::filesystem::path cfg_path);
 
     void run();
-    void trainColmap();
     void trainForOneIteration();
     void trainForOneIteration_ours();
 
@@ -244,12 +242,9 @@ protected:
 
     float monocular_inactive_geo_densify_max_pixel_dist_ = 20.0;
     float stereo_baseline_length_ = 0.0f;
-    int stereo_min_disparity_ = 0;
-    int stereo_num_disparity_ = 128;
+
     cv::Mat stereo_Q_;
     cv::Ptr<cv::cuda::StereoSGM> stereo_cv_sgm_;
-    float RGBD_min_depth_ = 0.0f;
-    float RGBD_max_depth_ = 100.0f;
 
     bool inactive_geo_densify_ = true;
     int depth_cached_ = 0;
@@ -264,10 +259,10 @@ protected:
     torch::Tensor override_color_;
 
     int new_keyframe_times_of_use_;
-    int local_BA_increased_times_of_use_;
-    int loop_closure_increased_times_of_use_;
+    // int local_BA_increased_times_of_use_;
+    // int loop_closure_increased_times_of_use_;
 
-    bool cull_keyframes_;
+    // bool cull_keyframes_;
     int stable_num_iter_existence_;
 
     bool do_gaus_pyramid_training_;
