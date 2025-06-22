@@ -22,7 +22,6 @@
 
 #include <torch/torch.h>
 #include <Eigen/Geometry>
-#include "submodules/colmap/utils/endian.h"
 #include "include/gaussian_mapper.h"
 #include "viewer/imgui_viewer.h"
 #include <pcl/visualization/pcl_visualizer.h>

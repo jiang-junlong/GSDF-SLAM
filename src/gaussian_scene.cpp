@@ -71,23 +71,6 @@ GaussianScene::getAllKeyframes()
     return this->keyframes_;
 }
 
-void GaussianScene::applyScaledTransformation(
-    const float s,
-    const Sophus::SE3f T)
-{
-    // Apply the scaled transformation on gaussian keyframes
-    for (auto &kfit : keyframes_)
-    {
-        std::shared_ptr<GaussianKeyframe> pkf = kfit.second;
-        Sophus::SE3f Twc = pkf->getPosef().inverse();
-        Twc.translation() *= s;
-        Sophus::SE3f Tyc = T * Twc;
-        Sophus::SE3f Tcy = Tyc.inverse();
-        pkf->setPose(Tcy.unit_quaternion().cast<double>(), Tcy.translation().cast<double>());
-        pkf->computeTransformTensors();
-    }
-}
-
 /**
  * @brief
  *

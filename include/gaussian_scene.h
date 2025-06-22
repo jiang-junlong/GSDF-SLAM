@@ -48,15 +48,11 @@ public:
     std::shared_ptr<GaussianKeyframe> getKeyframe(std::size_t fid);
     std::map<std::size_t, std::shared_ptr<GaussianKeyframe>> &keyframes();
     std::map<std::size_t, std::shared_ptr<GaussianKeyframe>> getAllKeyframes();
-    void applyScaledTransformation(
-        const float s = 1.0,
-        const Sophus::SE3f T = Sophus::SE3f(Eigen::Matrix3f::Identity(), Eigen::Vector3f::Zero()));
-
     std::tuple<Eigen::Vector3f, float> getNerfppNorm();
 
-    std::tuple<std::map<std::size_t, std::shared_ptr<GaussianKeyframe>>,
-               std::map<std::size_t, std::shared_ptr<GaussianKeyframe>>>
-    splitTrainAndTestKeyframes(const float test_ratio);
+    // std::tuple<std::map<std::size_t, std::shared_ptr<GaussianKeyframe>>,
+    //            std::map<std::size_t, std::shared_ptr<GaussianKeyframe>>>
+    // splitTrainAndTestKeyframes(const float test_ratio);
 
 public:
     float cameras_extent_; ///< scene_info.nerf_normalization["radius"]

@@ -40,8 +40,6 @@ namespace dataparser
     }
 
     torch::Tensor T_B_L, T_C_L;
-    torch::Tensor T_C0_L, T_C0_C2;
-
     std::filesystem::path depth_pose_path_;
     void load_data() override
     {
@@ -123,7 +121,7 @@ namespace dataparser
       color_poses_ = load_poses(pose_path_, false, 3)[0];
       color_poses_ = color_poses_.matmul(T_B_C);
       TORCH_CHECK(color_poses_.size(0) > 0);
-      
+
       depth_poses_ = load_poses(depth_pose_path_, false, 3)[0];
       depth_poses_ = depth_poses_.matmul(T_B_L);
       TORCH_CHECK(depth_poses_.size(0) > 0);

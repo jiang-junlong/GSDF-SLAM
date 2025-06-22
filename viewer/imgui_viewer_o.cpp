@@ -54,6 +54,7 @@ ImGuiViewer::ImGuiViewer(
         main_fx_ = pGausMapper->scene_->cameras_.begin()->second.params_[0];
         main_fy_ = pGausMapper->scene_->cameras_.begin()->second.params_[1];
     }
+    // std::cout << "[ImGuiViewer]Image size: " << main_fx_ << "x" << main_fy_ << std::endl;
 
     // Gaussian Mapper settings
     std::filesystem::path cfg_file_path = pGausMapper->config_file_path_;
@@ -167,6 +168,14 @@ void ImGuiViewer::run()
 
     // Variables for tracking
     Sophus::SE3f Tcw, TcwInit;
+    cam_pos_ = glm::vec3(viewpointX_, viewpointY_, viewpointZ_);
+    glm::vec4 cam_pos_aligned = glm::vec4(cam_pos_, 1.0f);
+    cam_target_ = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 cam_direction = cam_pos_ - cam_target_;
+    glm::vec3 cam_right = glm::normalize(glm::cross(up_, cam_direction));
+    glm::vec3 cam_up = glm::cross(cam_direction, cam_right);
+    glm::vec4 cam_up_aligned = glm::vec4(cam_up, 1.0f);
+    cam_view_ = glm::lookAt(cam_pos_, cam_target_, cam_up);
     glm::mat4 glmTwc, Twr, glmTwcInit;
     glmTwc = glm::mat4(1.0f);
     glmTwcInit = glm::mat4(1.0f);
@@ -220,27 +229,32 @@ void ImGuiViewer::run()
 
         if (tracking_vision_)
         {
-            /******************************************* 获得当前帧位姿 ************************************************/
-            if (pGausMapper_ && pGausMapper_->viewer_camera_id_set_)
+            glm::vec3 cam_target;
+            if (pGausMapper_->dataloader_ptr_ != nullptr)
             {
-                // std::cout << "[ImGuiViewer]viewer_camera_id: " << pGausMapper_->viewer_camera_id_ << std::endl;
-                std::shared_ptr<GaussianKeyframe> kf = pGausMapper_->scene_->getKeyframe(pGausMapper_->viewer_camera_id_);
-                Sophus::SE3f TcwInit = kf->getPosef();
-                Eigen::Matrix4f Twc = TcwInit.matrix().inverse();
-                // std::cout << "TcwInit:\n " << TcwInit.matrix() << std::endl;
-                glmTwcInit = trans4x4Eigen2glm(Twc);
-
-                OwInit = glm::mat4(1.0f);
-                OwInit[3][0] = Twc(0, 3);
-                OwInit[3][1] = Twc(1, 3);
-                OwInit[3][2] = Twc(2, 3);
+                cam_target = glm::vec3(pGausMapper_->position_[0], pGausMapper_->position_[1], pGausMapper_->position_[2]);
+                // std::cout << "[ImGuiViewer]Cam target: " << cam_target.x << " " << cam_target.y << " " << cam_target.z << std::endl;
             }
+            else
+                cam_target = glm::vec3(Ow[3][0], Ow[3][1], Ow[3][2]);
+            cam_pos_aligned = glmTwc * behind_;
+            glm::vec3 cam_pos = glm::vec3(cam_pos_aligned.x, cam_pos_aligned.y, cam_pos_aligned.z);
+            cam_direction = cam_pos - cam_target;
+            // cam_right = glm::normalize(glm::cross(up_, cam_direction));
+            // cam_up = glm::cross(cam_direction, cam_right);
+            cam_up_aligned = glmTwc * up_aligned_;
+            cam_up = glm::normalize(glm::vec3(cam_up_aligned.x, cam_up_aligned.y, cam_up_aligned.z) - cam_target);
+            cam_right = glm::normalize(glm::cross(cam_up, cam_direction));
+            cam_up = glm::cross(cam_direction, cam_right);
+            cam_view_ = glm::lookAt(cam_pos, cam_target, cam_up);
+            cam_trans_ = cam_proj_ * cam_view_;
         }
         else
         {
             if (reset_main_to_init_ || !init_Twc_set_)
             {
-
+                cam_target_ = glm::vec3(OwInit[3][0], OwInit[3][1], OwInit[3][2]);
+                cam_pos_aligned = glmTwcInit * behind_;
                 glmTwc_main_ = glmTwcInit;
                 Tcw_main_ = TcwInit;
                 Twc_main_ = Tcw_main_.inverse();
@@ -252,7 +266,19 @@ void ImGuiViewer::run()
                 Tcw_main_ = trans4x4glm2Sophus(glmTwc_main_).inverse();
                 handleUserInput();
                 glmTwc_main_ = trans4x4Eigen2glm(Tcw_main_.inverse().matrix());
+                cam_target_ = glm::vec3(glmTwc_main_[3][0], glmTwc_main_[3][1], glmTwc_main_[3][2]);
+                cam_pos_aligned = glmTwc_main_ * behind_;
             }
+            cam_pos_ = glm::vec3(cam_pos_aligned.x, cam_pos_aligned.y, cam_pos_aligned.z);
+            cam_direction = cam_pos_ - cam_target_;
+            // cam_right = glm::normalize(glm::cross(up_, cam_direction));
+            // cam_up = glm::cross(cam_direction, cam_right);
+            cam_up_aligned = glmTwc_main_ * up_aligned_;
+            cam_up = glm::normalize(glm::vec3(cam_up_aligned.x, cam_up_aligned.y, cam_up_aligned.z) - cam_target_);
+            cam_right = glm::normalize(glm::cross(cam_up, cam_direction));
+            cam_up = glm::cross(cam_direction, cam_right);
+            cam_view_ = glm::lookAt(cam_pos_, cam_target_, cam_up);
+            cam_trans_ = cam_proj_ * cam_view_;
         }
 
         //--------------Draw main window image--------------
@@ -376,12 +402,12 @@ void ImGuiViewer::run()
 
         //--------------Draw main window SLAM--------------
         // Set relative viewpoint
-        // glPushMatrix();
-        // glMultMatrixf(&cam_trans_[0][0]);
+        glPushMatrix();
+        glMultMatrixf(&cam_trans_[0][0]);
         // Draw camera, KeyFrames and MapPoints
 
         // Clear relative viewpoint
-        // glPopMatrix();
+        glPopMatrix();
 
         glfwSwapBuffers(window);
         glfwPollEvents();

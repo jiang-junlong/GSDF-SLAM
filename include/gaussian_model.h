@@ -24,16 +24,15 @@
 #include <torch/torch.h>
 #include <c10/cuda/CUDACachingAllocator.h>
 
-#include "submodules/Sophus/sophus/se3.hpp"
-#include "submodules/simple-knn/spatial.h"
-#include "submodules/utils/ply_utils/tinyply.h"
-
 #include "types.h"
-#include "operate_points.h"
 #include "general_utils.h"
 #include "sh_utils.h"
 #include "tensor_utils.h"
 #include "gaussian_parameters.h"
+
+#include "submodules/Sophus/sophus/se3.hpp"
+#include "submodules/simple-knn/spatial.h"
+#include "submodules/utils/ply_utils/tinyply.h"
 
 #define GAUSSIAN_MODEL_TENSORS_TO_VEC                        \
     this->Tensor_vec_xyz_ = {this->xyz_};                    \
@@ -78,23 +77,6 @@ public:
     void increasePcd(std::vector<float> points, std::vector<float> colors, const int iteration);
     void increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &new_colors, const int iteration);
     void increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &new_colors, const int iteration, const float spatial_lr_scale);
-
-    void applyScaledTransformation(
-        const float s = 1.0,
-        const Sophus::SE3f T = Sophus::SE3f(Eigen::Matrix3f::Identity(), Eigen::Vector3f::Zero()));
-    void scaledTransformationPostfix(
-        torch::Tensor &new_xyz,
-        torch::Tensor &new_scaling);
-
-    void scaledTransformVisiblePointsOfKeyframe(
-        torch::Tensor &point_not_transformed_flags,
-        torch::Tensor &diff_pose,
-        torch::Tensor &kf_world_view_transform,
-        torch::Tensor &kf_full_proj_transform,
-        const int kf_creation_iter,
-        const int stable_num_iter_existence,
-        int &num_transformed,
-        const float scale = 1.0f);
 
     void trainingSetup(const GaussianOptimizationParams &training_args);
     float updateLearningRate(int step);
@@ -157,13 +139,13 @@ public:
     int active_sh_degree_;
     int max_sh_degree_;
 
-    torch::Tensor xyz_;                   // 位置
-    torch::Tensor features_dc_;           // 球谐系数（常数颜色部分）
-    torch::Tensor features_rest_;         // 球谐系数（其它颜色部分）
-    torch::Tensor scaling_;               // 缩放
-    torch::Tensor rotation_;              // 旋转
-    torch::Tensor opacity_;               // 不透明度
-    torch::Tensor max_radii2D_;           // 最大半径2D
+    torch::Tensor xyz_;           // 位置
+    torch::Tensor features_dc_;   // 球谐系数（常数颜色部分）
+    torch::Tensor features_rest_; // 球谐系数（其它颜色部分）
+    torch::Tensor scaling_;       // 缩放
+    torch::Tensor rotation_;      // 旋转
+    torch::Tensor opacity_;       // 不透明度
+    torch::Tensor max_radii2D_;   // 最大半径2D
     torch::Tensor xyz_gradient_accum_;
     torch::Tensor denom_;
     torch::Tensor exist_since_iter_;

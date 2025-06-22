@@ -111,12 +111,41 @@ void GaussianModel::setShDegree(const int sh)
     this->active_sh_degree_ = (sh > this->max_sh_degree_ ? this->max_sh_degree_ : sh);
 }
 
+//            ┌──────────────────────────┐
+//            │    GlobalVoxelHashMap    │
+//            └──────────────────────────┘
+//                       ▲
+// ┌──────────────┬──────┴───────────┬───────────────┐
+// │Hash keys     │    Gaussian IDs  │  Voxel buckets│
+// └──────────────┴──────────────────┴───────────────┘
+//                      ▼
+//       ┌────────────────────────────────────┐
+//       │ GaussianModel (Tensor Pools)       │
+//       │   - xyz_                           │
+//       │   - features_dc_ / features_rest_  │
+//       │   - opacity_, scale_, rot_, ...    │
+//       └────────────────────────────────────┘
+
 // 从稀疏点云中初始化高斯基元
 void GaussianModel::createFromPcd(
     torch::Tensor &point_cloud,
     torch::Tensor &color,
     const float spatial_lr_scale)
 {
+    float voxel_size = 0.05f;
+    torch::Tensor voxel_indices = torch::floor(point_cloud / voxel_size).to(torch::kInt32);
+    // 使用哈希编码生成体素键（int64）
+    torch::Tensor voxel_hash = (voxel_indices.select(1, 0).to(torch::kInt64) * 73856093 +
+                                voxel_indices.select(1, 1).to(torch::kInt64) * 19349663 +
+                                voxel_indices.select(1, 2).to(torch::kInt64) * 83492791);
+
+    // 找到每个体素第一次出现的索引（unique 保留顺序）
+    auto result = torch::_unique2(voxel_hash, /*sorted=*/false, /*return_inverse=*/false, /*return_counts=*/false);
+    torch::Tensor keep_indices = std::get<1>(result); // 取的是 unique 的返回值中的索引
+
+    point_cloud.index_select(0, keep_indices);
+    color.index_select(0, keep_indices);
+
     this->spatial_lr_scale_ = spatial_lr_scale;
     torch::Tensor fused_color = sh_utils::RGB2SH(color); // 将颜色张量转换为球谐系数张量feature
     auto temp = this->max_sh_degree_ + 1;
@@ -169,108 +198,6 @@ void GaussianModel::createFromPcd(
     this->max_radii2D_ = torch::zeros({this->getXYZ().size(0)}, torch::TensorOptions().device(device_type_)); // 初始化高斯半径
 }
 
-void GaussianModel::increasePcd(std::vector<float> points, std::vector<float> colors, const int iteration)
-{
-    // auto time1 = std::chrono::steady_clock::now();
-    assert(points.size() == colors.size());
-    assert(points.size() % 3 == 0);
-    auto num_new_points = static_cast<int>(points.size() / 3);
-    if (num_new_points == 0)
-        return;
-
-    torch::Tensor new_point_cloud = torch::from_blob(
-                                        points.data(), {num_new_points, 3},
-                                        torch::TensorOptions().dtype(torch::kFloat32))
-                                        .to(device_type_);
-    // torch::zeros({num_new_points, 3}, xyz_.options());
-    torch::Tensor new_colors = torch::from_blob(
-                                   colors.data(), {num_new_points, 3},
-                                   torch::TensorOptions().dtype(torch::kFloat32))
-                                   .to(device_type_);
-    // torch::zeros({num_new_points, 3}, xyz_.options());
-
-    if (sparse_points_xyz_.size(0) == 0)
-    {
-        sparse_points_xyz_ = new_point_cloud;
-        sparse_points_color_ = new_colors;
-    }
-    else
-    {
-        sparse_points_xyz_ = torch::cat({sparse_points_xyz_, new_point_cloud}, /*dim=*/0);
-        sparse_points_color_ = torch::cat({sparse_points_color_, new_colors}, /*dim=*/0);
-    }
-
-    torch::Tensor new_fused_colors = sh_utils::RGB2SH(new_colors);
-    auto temp = this->max_sh_degree_ + 1;
-    torch::Tensor features = torch::zeros(
-        {new_fused_colors.size(0), 3, temp * temp},
-        torch::TensorOptions().dtype(torch::kFloat).device(device_type_));
-    features.index(
-        {torch::indexing::Slice(),
-         torch::indexing::Slice(0, 3),
-         0}) = new_fused_colors;
-    features.index(
-        {torch::indexing::Slice(),
-         torch::indexing::Slice(3, features.size(1)),
-         torch::indexing::Slice(1, features.size(2))}) = 0.0f;
-
-    // std::cout << "[Gaussian Model]Number of points increase : "
-    //           << num_new_points << std::endl;
-
-    torch::Tensor dist2 = torch::clamp_min(
-        distCUDA2(new_point_cloud.clone()), 0.0000001);
-    torch::Tensor scales = torch::log(torch::sqrt(dist2));
-    auto scales_ndimension = scales.ndimension();
-    scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
-    torch::Tensor rots = torch::zeros(
-        {new_point_cloud.size(0), 4},
-        torch::TensorOptions().device(device_type_));
-    rots.index({torch::indexing::Slice(), 0}) = 1;
-    torch::Tensor opacities = general_utils::inverse_sigmoid(
-        0.1f * torch::ones(
-                   {new_point_cloud.size(0), 1},
-                   torch::TensorOptions().dtype(torch::kFloat).device(device_type_)));
-
-    torch::Tensor new_exist_since_iter = torch::full(
-        {new_point_cloud.size(0)},
-        iteration,
-        torch::TensorOptions().dtype(torch::kInt32).device(device_type_));
-
-    auto new_xyz = new_point_cloud;
-    auto new_features_dc = features.index({torch::indexing::Slice(),
-                                           torch::indexing::Slice(),
-                                           torch::indexing::Slice(0, 1)})
-                               .transpose(1, 2)
-                               .contiguous();
-    auto new_features_rest = features.index({torch::indexing::Slice(),
-                                             torch::indexing::Slice(),
-                                             torch::indexing::Slice(1, features.size(2))})
-                                 .transpose(1, 2)
-                                 .contiguous();
-    auto new_opacities = opacities;
-    auto new_scaling = scales;
-    auto new_rotation = rots;
-
-    // auto time2 = std::chrono::steady_clock::now();
-    // auto time = std::chrono::duration_cast<std::chrono::milliseconds>(time2-time1).count();
-    // std::cout << "increasePcd(umap) preparation time: " << time << " ms" <<std::endl;
-
-    densificationPostfix(
-        new_xyz,
-        new_features_dc,
-        new_features_rest,
-        new_opacities,
-        new_scaling,
-        new_rotation,
-        new_exist_since_iter);
-
-    c10::cuda::CUDACachingAllocator::emptyCache();
-    // auto time3 = std::chrono::steady_clock::now();
-    // time = std::chrono::duration_cast<std::chrono::milliseconds>(time3-time2).count();
-    // std::cout << "increasePcd(umap) postfix time: " << time << " ms" <<std::endl;
-}
-// 针对Tensor输入的 `increasePcd` 函数实现
-
 void GaussianModel::increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &new_colors, const int iteration, const float spatial_lr_scale)
 {
     this->spatial_lr_scale_ = spatial_lr_scale;
@@ -284,16 +211,39 @@ void GaussianModel::increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &n
     if (num_new_points == 0)
         return;
 
-    if (sparse_points_xyz_.size(0) == 0)
-    {
-        sparse_points_xyz_ = new_point_cloud;
-        sparse_points_color_ = new_colors;
-    }
-    else
-    {
-        sparse_points_xyz_ = torch::cat({sparse_points_xyz_, new_point_cloud}, /*dim=*/0);
-        sparse_points_color_ = torch::cat({sparse_points_color_, new_colors}, /*dim=*/0);
-    }
+    float voxel_size = 0.05f;
+
+    // === 1. 体素坐标计算与哈希 ===
+    torch::Tensor existing_voxels = torch::floor(this->xyz_ / voxel_size).to(torch::kInt32);
+    torch::Tensor existing_hash_keys =
+        existing_voxels.select(1, 0).to(torch::kInt64) * 73856093 +
+        existing_voxels.select(1, 1).to(torch::kInt64) * 19349663 +
+        existing_voxels.select(1, 2).to(torch::kInt64) * 83492791;
+
+    torch::Tensor voxel_indices = torch::floor(new_point_cloud / voxel_size).to(torch::kInt32);
+    torch::Tensor hash_keys =
+        voxel_indices.select(1, 0).to(torch::kInt64) * 73856093 +
+        voxel_indices.select(1, 1).to(torch::kInt64) * 19349663 +
+        voxel_indices.select(1, 2).to(torch::kInt64) * 83492791;
+
+    // === 2. 并行查重: 是否存在于已有高斯体素中 ===
+    torch::Tensor isin_mask = torch::isin(hash_keys, existing_hash_keys); // bool tensor
+    torch::Tensor keep_indices = (~isin_mask).nonzero().squeeze();        // int64 tensor
+
+    // === 3. 筛选点和颜色 ===
+    new_point_cloud = new_point_cloud.index_select(0, keep_indices);
+    new_colors = new_colors.index_select(0, keep_indices);
+
+    // if (sparse_points_xyz_.size(0) == 0)
+    // {
+    //     sparse_points_xyz_ = new_point_cloud;
+    //     sparse_points_color_ = new_colors;
+    // }
+    // else
+    // {
+    //     sparse_points_xyz_ = torch::cat({sparse_points_xyz_, new_point_cloud}, /*dim=*/0);
+    //     sparse_points_color_ = torch::cat({sparse_points_color_, new_colors}, /*dim=*/0);
+    // }
 
     torch::Tensor new_fused_colors = sh_utils::RGB2SH(new_colors);
     auto temp = this->max_sh_degree_ + 1;
@@ -364,103 +314,6 @@ void GaussianModel::increasePcd(torch::Tensor &new_point_cloud, torch::Tensor &n
     // auto time3 = std::chrono::steady_clock::now();
     // time = std::chrono::duration_cast<std::chrono::milliseconds>(time3-time2).count();
     // std::cout << "increasePcd(tensor) postfix time: " << time << " ms" <<std::endl;
-}
-
-void GaussianModel::applyScaledTransformation(
-    const float s,
-    const Sophus::SE3f T)
-{
-    torch::NoGradGuard no_grad;
-    // pt <- (s * Ryw * pt + tyw)
-    this->xyz_ *= s;
-    torch::Tensor T_tensor =
-        tensor_utils::EigenMatrix2TorchTensor(T.matrix(), device_type_).transpose(0, 1);
-    transformPoints(this->xyz_, T_tensor);
-
-    // torch::Tensor scales;
-    // torch::Tensor point_cloud_copy = this->xyz_.clone();
-    // torch::Tensor dist2 = torch::clamp_min(distCUDA2(point_cloud_copy), 0.0000001);
-    // scales = torch::log(torch::sqrt(dist2));
-    // auto scales_ndimension = scales.ndimension();
-    // scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
-    this->scaling_ *= s;
-    scaledTransformationPostfix(this->xyz_, this->scaling_);
-}
-
-void GaussianModel::scaledTransformationPostfix(
-    torch::Tensor &new_xyz,
-    torch::Tensor &new_scaling)
-{
-    // param_groups[0] = xyz_
-    torch::Tensor optimizable_xyz = this->replaceTensorToOptimizer(new_xyz, 0);
-    // param_groups[4] = scaling_
-    torch::Tensor optimizable_scaling = this->replaceTensorToOptimizer(new_scaling, 4);
-
-    this->xyz_ = optimizable_xyz;
-    this->scaling_ = optimizable_scaling;
-
-    this->Tensor_vec_xyz_ = {this->xyz_};
-    this->Tensor_vec_scaling_ = {this->scaling_};
-}
-
-void GaussianModel::scaledTransformVisiblePointsOfKeyframe(
-    torch::Tensor &point_not_transformed_flags,
-    torch::Tensor &diff_pose,
-    torch::Tensor &kf_world_view_transform,
-    torch::Tensor &kf_full_proj_transform,
-    const int kf_creation_iter,
-    const int stable_num_iter_existence,
-    int &num_transformed,
-    const float scale)
-{
-    torch::NoGradGuard no_grad;
-
-    torch::Tensor points = this->getXYZ();
-    torch::Tensor rots = this->getRotationActivation();
-    // torch::Tensor scales = this->scaling_;// * scale;
-
-    torch::Tensor point_unstable_flags = torch::where(
-        torch::abs(this->exist_since_iter_ - kf_creation_iter) < stable_num_iter_existence,
-        true,
-        false);
-
-    scaleAndTransformThenMarkVisiblePoints(
-        points,
-        rots,
-        point_not_transformed_flags,
-        point_unstable_flags,
-        diff_pose,
-        kf_world_view_transform,
-        kf_full_proj_transform,
-        num_transformed,
-        scale);
-
-    // torch::Tensor point_cloud_copy = points.clone();
-    // torch::Tensor dist2 = torch::clamp_min(distCUDA2(point_cloud_copy), 0.0000001);
-    // torch::Tensor scales = torch::log(torch::sqrt(dist2));
-    // auto scales_ndimension = scales.ndimension();
-    // scales = scales.unsqueeze(scales_ndimension).repeat({1, 3});
-
-    // Postfix
-    // ==================================
-    // param_groups[0] = xyz_
-    // param_groups[1] = feature_dc_
-    // param_groups[2] = feature_rest_
-    // param_groups[3] = opacity_
-    // param_groups[4] = scaling_
-    // param_groups[5] = rotation_
-    // ==================================
-    torch::Tensor optimizable_xyz = this->replaceTensorToOptimizer(points, 0);
-    // torch::Tensor optimizable_scaling = this->replaceTensorToOptimizer(scales, 4);
-    torch::Tensor optimizable_rots = this->replaceTensorToOptimizer(rots, 5);
-
-    this->xyz_ = optimizable_xyz;
-    // this->scaling_ = optimizable_scaling;
-    this->rotation_ = optimizable_rots;
-
-    this->Tensor_vec_xyz_ = {this->xyz_};
-    // this->Tensor_vec_scaling_ = {this->scaling_};
-    this->Tensor_vec_rotation_ = {this->rotation_};
 }
 
 void GaussianModel::trainingSetup(const GaussianOptimizationParams &training_args)

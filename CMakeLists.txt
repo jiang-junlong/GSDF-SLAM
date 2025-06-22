@@ -17,6 +17,10 @@ set(CMAKE_CUDA_STANDARD 17)
 
 set(CAFFE2_USE_CUDNN on)
 set(Torch_DIR /home/jiang/envs/libtorch-cu118/share/cmake/Torch)
+set(ONNXRUNTIME_ROOT /home/jiang/envs/onnxruntime)
+
+find_package(Python3  REQUIRED)
+include_directories(${Python3_INCLUDE_DIRS})
 find_package(Torch REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -27,6 +31,7 @@ find_package(yaml-cpp REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(glm REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(Threads REQUIRED)
 
 # find_package(realsense2)
 # set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE INTERNAL "No dev warnings") # 关闭pcl烦人的警告
@@ -35,6 +40,7 @@ find_package(PCL REQUIRED)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
+
 include_directories(
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/submodules/Sophus
@@ -42,7 +48,10 @@ include_directories(
     ${OPENGL_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
+    ${Python3_INCLUDE_DIRS}
+    ${ONNXRUNTIME_ROOT}/include
     )
+
 ##################################################################################
 ##  Build the gaussian splatting component libraries to ${PROJECT_SOURCE_DIR}/lib
 ##################################################################################
@@ -56,23 +65,18 @@ add_library(simple_knn STATIC
 target_link_libraries(simple_knn "${TORCH_LIBRARIES}")
 
 add_library(cuda_rasterizer STATIC
-    include/operate_points.h
-    src/operate_points.cu
     include/rasterize_points.h
     src/rasterize_points.cu
-    include/stereo_vision.h
-    src/stereo_vision.cu
     cuda_rasterizer/auxiliary.h
     cuda_rasterizer/backward.cu
     cuda_rasterizer/backward.h
     cuda_rasterizer/config.h
     cuda_rasterizer/forward.cu
     cuda_rasterizer/forward.h
-    cuda_rasterizer/operate_points.h
     cuda_rasterizer/rasterizer.h
     cuda_rasterizer/rasterizer_impl.cu
     cuda_rasterizer/rasterizer_impl.h
-    cuda_rasterizer/stereo_vision.h)
+    )
 set_target_properties(cuda_rasterizer PROPERTIES CUDA_ARCHITECTURES "75;86")
 # target_compile_features(cuda_rasterizer PUBLIC cxx_std_17)
 target_include_directories(cuda_rasterizer PRIVATE
@@ -108,13 +112,13 @@ target_link_libraries(imgui glfw OpenGL::GL)
 ##################################################################################
 ##  Build the gaussian mapper library to ${PROJECT_SOURCE_DIR}/lib
 ##################################################################################
+
 add_library(ply_utils submodules/utils/ply_utils/ply_utils_pcl.cpp
                       submodules/utils/ply_utils/ply_utils_torch.cpp)
 target_link_libraries(ply_utils  
                       ${PCL_LIBRARIES}
                       ${TORCH_LIBRARIES}
                       )
-
 
 add_library(gaussian_mapper STATIC
     include/gaussian_keyframe.h
@@ -123,7 +127,6 @@ add_library(gaussian_mapper STATIC
     include/gaussian_rasterizer.h
     include/gaussian_renderer.h
     include/gaussian_scene.h
-    include/gaussian_trainer.h
     include/gaussian_mapper.h
     include/general_utils.h
     include/graphics_utils.h
@@ -139,7 +142,6 @@ add_library(gaussian_mapper STATIC
     src/gaussian_rasterizer.cpp
     src/gaussian_renderer.cpp
     src/gaussian_scene.cpp
-    src/gaussian_trainer.cpp
     src/gaussian_mapper.cpp)
 target_link_libraries(gaussian_mapper
     ${OpenCV_LIBRARIES}
@@ -149,6 +151,7 @@ target_link_libraries(gaussian_mapper
     simple_knn
     cuda_rasterizer
     ply_utils
+    ${ONNXRUNTIME_ROOT}/build/Linux/Release/libonnxruntime.so
     )
 
 ##################################################################################
@@ -215,13 +218,6 @@ target_link_libraries(cuda_colorize
 ##################################################################################
 ##  Build the test examples to ${PROJECT_SOURCE_DIR}/bin
 ##################################################################################
-find_package(Threads REQUIRED)
-
-
-# add_executable(view_result demo/view_result.cpp)
-# target_link_libraries(view_result
-#     gaussian_viewer
-#     gaussian_mapper)
 
 add_executable(train_kitti demo/train_kitti.cpp)
 target_link_libraries(train_kitti
@@ -232,20 +228,14 @@ target_link_libraries(train_kitti
         Threads::Threads
         )
 
-add_executable(test_dataloader demo/test_dataloader.cpp)
-target_link_libraries(test_dataloader
-        gaussian_viewer
-        gaussian_mapper
-        data_loader
-        )
+# add_executable(view_result demo/view_result.cpp)
+# target_link_libraries(view_result
+#     gaussian_viewer
+#     gaussian_mapper)
 
-add_executable(color_point_cloud color_point_cloud.cpp)
-target_link_libraries(color_point_cloud
-    ${OpenCV_LIBRARIES}
-    ${PCL_LIBRARIES}
-    "${TORCH_LIBRARIES}"
-    Eigen3::Eigen
-    glm::glm
-    glfw
-    OpenGL::GL
-)
+# add_executable(test_dataloader demo/test_dataloader.cpp)
+# target_link_libraries(test_dataloader
+#         gaussian_viewer
+#         gaussian_mapper
+#         data_loader
+#         )

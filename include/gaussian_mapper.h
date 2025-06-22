@@ -19,7 +19,8 @@
 #pragma once
 
 #include <torch/torch.h>
-
+#include "onnxruntime/core/session/onnxruntime_cxx_api.h"
+// #include "onnxruntime/core/providers/cuda/cuda_provider_factory.h"
 #include <iostream>
 #include <algorithm>
 #include <fstream>
@@ -39,12 +40,14 @@
 
 #include <jsoncpp/json/json.h>
 
-#include "operate_points.h"
-#include "stereo_vision.h"
 #include "tensor_utils.h"
 #include "gaussian_keyframe.h"
 #include "gaussian_scene.h"
-#include "gaussian_trainer.h"
+#include "loss_utils.h"
+#include "gaussian_parameters.h"
+#include "gaussian_model.h"
+#include "gaussian_renderer.h"
+
 #include "submodules/data_loader/data_loader.h"
 
 #define CHECK_DIRECTORY_AND_CREATE_IF_NOT_EXISTS(dir)  \
@@ -107,7 +110,18 @@ public:
 
     void run();
     void trainForOneIteration();
-    void trainForOneIteration_ours();
+    void trainingReport(
+        int iteration,
+        int num_iterations,
+        torch::Tensor &Ll1,
+        torch::Tensor &loss,
+        float ema_loss_for_log,
+        std::function<torch::Tensor(torch::Tensor &, torch::Tensor &)> l1_loss,
+        int64_t elapsed_time,
+        GaussianModel &gaussians,
+        GaussianScene &scene,
+        GaussianPipelineParams &pipe,
+        torch::Tensor &background);
 
     bool isStopped();
     void signalStop(const bool going_to_stop = true);
@@ -163,21 +177,10 @@ public:
     void loadPly(std::filesystem::path ply_path, std::filesystem::path camera_path = "");
 
 protected:
-    void handleNewKeyframe(std::tuple<unsigned long,
-                                      unsigned long,
-                                      Sophus::SE3f,
-                                      cv::Mat,
-                                      bool,
-                                      cv::Mat,
-                                      std::vector<float>,
-                                      std::vector<float>,
-                                      std::string> &kf);
     void generateKfidRandomShuffle();
     std::shared_ptr<GaussianKeyframe> useOneRandomSlidingWindowKeyframe();
     std::shared_ptr<GaussianKeyframe> useOneRandomKeyframe();
     void increaseKeyframeTimesOfUse(std::shared_ptr<GaussianKeyframe> pkf, int times);
-    void increasePcdByKeyframeInactiveGeoDensify(
-        std::shared_ptr<GaussianKeyframe> pkf);
 
     void savePly(std::filesystem::path result_dir);
     void keyframesToJson(std::filesystem::path result_dir);
@@ -185,7 +188,6 @@ protected:
     void writeKeyframeUsedTimes(std::filesystem::path result_dir, std::string name_suffix = "");
 
 public:
-    Eigen::Vector3d position_;
     // Parameters
     std::filesystem::path config_file_path_;
 
@@ -204,8 +206,7 @@ public:
     float rendered_image_viewer_scale_main_ = 1.0f;
 
     float z_near_ = 0.01f;
-    // float z_far_ = 100.0f;
-    float z_far_ = 500.0f;
+    float z_far_ = 100.0f;
 
     // Data
     bool kfid_shuffled_ = false;
@@ -213,6 +214,14 @@ public:
     std::map<camera_id_t, torch::Tensor> viewer_main_undistort_mask_;
     std::map<camera_id_t, torch::Tensor> viewer_sub_undistort_mask_;
     dataloader::DataLoader::Ptr dataloader_ptr_; // 数据加载器
+
+    // === skyseg ONNX 相关对象 ===
+    Ort::Env ort_env_;
+    Ort::SessionOptions session_options_;
+    std::unique_ptr<Ort::Session> skyseg_session_;
+    // Ort::MemoryInfo ort_memory_info_;
+    std::unique_ptr<Ort::MemoryInfo> ort_memory_info_ptr_;
+
 
 protected:
     // Parameters
@@ -287,4 +296,5 @@ protected:
     std::mutex mutex_status_;
     std::mutex mutex_settings_;
     std::mutex mutex_render_; ///< the model is suppose to be read-only from outside
+    std::mutex mutex_viewer_; ///< the keyframes are suppose to be read-only from outside
 };
